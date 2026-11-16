@@ -1,0 +1,46 @@
+{
+  "photos": [
+    {
+      "image": "assets/montreal-duplex-renovation.jpeg",
+      "caption_en": "",
+      "caption_fr": "",
+      "alt_en": "",
+      "alt_fr": ""
+    },
+    {
+      "image": "assets/montreal-duplex-addition.jpeg",
+      "caption_en": "",
+      "caption_fr": "",
+      "alt_en": "",
+      "alt_fr": ""
+    },
+    {
+      "image": "assets/custom-structural-masonry-montreal.jpeg",
+      "caption_en": "",
+      "caption_fr": "",
+      "alt_en": "",
+      "alt_fr": ""
+    },
+    {
+      "image": "assets/traditional-building-crafts-montreal.jpeg",
+      "caption_en": "",
+      "caption_fr": "",
+      "alt_en": "",
+      "alt_fr": ""
+    },
+    {
+      "image": "assets/custom-millwork-montreal.jpeg",
+      "caption_en": "",
+      "caption_fr": "",
+      "alt_en": "",
+      "alt_fr": ""
+    },
+    {
+      "image": "assets/custom-residential-millwork-montreal.jpeg",
+      "caption_en": "",
+      "caption_fr": "",
+      "alt_en": "",
+      "alt_fr": ""
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+backend:
+  name: github
+  repo: maticontal95/contal-website
+  branch: main
+media_folder: assets/uploads
+public_folder: /assets/uploads
+collections:
+  - name: site
+    label: Site
+    files:
+      - name: gallery
+        label: Photos
+        file: gallery.json
+        fields:
+          - name: photos
+            label: Photos (drag to reorder)
+            widget: list
+            summary: '{{fields.image}}'
+            fields:
+              - {name: image, label: Photo, widget: image}
+              - {name: caption_fr, label: Légende française, widget: string, required: false}
+              - {name: caption_en, label: English caption, widget: string, required: false}
+              - {name: alt_fr, label: Description accessible française, widget: string, required: false}
+              - {name: alt_en, label: English accessible description, widget: string, required: false}
