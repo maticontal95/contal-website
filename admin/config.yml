@@ -13,7 +13,9 @@ collections:
         file: gallery.json
         fields:
           - name: photos
-            label: Photos (drag to reorder)
+            label: Photos
+            label_singular: Photo
+            hint: 'Add a photo, choose its image, then publish. Uploading to Media alone does not add it to this gallery.'
             widget: list
             summary: '{{fields.image}}'
             fields:
