@@ -41,7 +41,7 @@ function fadeThrough(targets, update, animate = true) {
   fadeAnimations = [];
   if (pendingUpdate) { const previous = pendingUpdate; pendingUpdate = null; previous(); }
   const token = ++fadeToken;
-  if (!animate || reducedMotion.matches) { update(); return; }
+  if (!animate) { update(); return; }
   pendingUpdate = update;
   fadeAnimations = targets.map(element => {
     const from = current.has(element) ? current.get(element) : underlyingOpacity(element);
@@ -79,6 +79,29 @@ function prepareTranslation(element, nextText) {
   return {target: changed, update: () => { changed.textContent = nextText.slice(start, nextText.length - end); }};
 }
 
+/* ---------- Hero copy always fits the fixed hero box ---------- */
+
+function fitCopy() {
+  document.querySelectorAll('.stage-services, .stage-about').forEach(panel => {
+    const content = panel.querySelector('.about-content');
+    const box = panel.querySelector('.about-box');
+    content.style.setProperty('--fit', 1);
+    if (!panel.classList.contains('is-active')) return;
+    const available = box.clientHeight;
+    if (content.offsetHeight <= available) return;
+    // Largest text size (down to half) at which the copy fits.
+    let low = 0.5, high = 1;
+    for (let step = 0; step < 8; step++) {
+      const middle = (low + high) / 2;
+      content.style.setProperty('--fit', middle.toFixed(4));
+      if (content.offsetHeight <= available) low = middle; else high = middle;
+    }
+    content.style.setProperty('--fit', low.toFixed(4));
+  });
+}
+new ResizeObserver(() => fitCopy()).observe(stage);
+document.fonts?.ready.then(fitCopy);
+
 function applyLanguage(animate = false) {
   document.documentElement.lang = language;
   document.title = metadata['title_' + language];
@@ -92,6 +115,7 @@ function applyLanguage(animate = false) {
     document.querySelectorAll('[data-language]').forEach(element => { element.hidden = element.dataset.language !== language; });
     photos.forEach(button => { button.querySelector('img').alt = button.dataset[language === 'en' ? 'altEn' : 'altFr']; });
     if (active >= 0) updateCaption();
+    fitCopy();
   }, animate);
 }
 function updateCaption() {
@@ -110,6 +134,7 @@ document.querySelectorAll('.menu-link').forEach(button => button.addEventListene
   document.querySelectorAll('.menu-link').forEach(item => item.classList.toggle('is-active', item === button));
   fadeThrough([stage], () => {
     document.querySelectorAll('.stage-panel').forEach(panel => panel.classList.toggle('is-active', panel.dataset.stage === button.dataset.panel));
+    fitCopy();
   });
 }));
 
@@ -282,8 +307,10 @@ async function navigate(direction, offset = 0, speed = 0) {
   const distance = stripDistance(direction);
   // A swipe continues at the finger's speed; arrow keys use a full, even glide.
   const remaining = distance - Math.abs(offset);
-  const duration = offset ? Math.max(260, Math.min(SLIDE_MS, speed ? remaining / speed * 1.6 : SLIDE_MS * remaining / distance + 120)) : SLIDE_MS;
-  const options = {duration: ms(duration), easing: offset ? 'cubic-bezier(.2,.6,.3,1)' : SLIDE_EASE, fill: 'forwards'};
+  const fromSwipe = offset !== 0;
+  const glide = speed > 0.05 ? remaining / speed * 2.2 : SLIDE_MS * remaining / distance + 200;
+  const duration = fromSwipe ? Math.max(340, Math.min(620, glide)) : ms(SLIDE_MS);
+  const options = {duration, easing: fromSwipe ? 'cubic-bezier(.25,.8,.35,1)' : SLIDE_EASE, fill: 'forwards'};
   frame.style.transform = incoming.style.transform = '';
   const outgoingAnimation = frame.animate([{transform: `translateX(${offset}px)`}, {transform: `translateX(${-direction * distance}px)`}], options);
   const incomingAnimation = incoming.animate([{transform: `translateX(${offset + direction * distance}px)`}, {transform: 'translateX(0)'}], options);
@@ -360,7 +387,7 @@ function releaseDrag(cancelled = false) {
   const flick = Math.sign(speed) === -direction && Math.abs(speed) > 0.35;
   if (!cancelled && (Math.abs(dx) > 45 || flick)) { navigate(direction, dx, Math.abs(speed)); return; }
   // Not far enough: spring both photos back into place.
-  const options = {duration: ms(280), easing: 'cubic-bezier(.2,.7,.3,1)'};
+  const options = {duration: 320, easing: 'cubic-bezier(.25,.8,.35,1)'};
   const incoming = neighbor;
   const distance = stripDistance(direction);
   frame.style.transform = '';
