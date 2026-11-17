@@ -152,14 +152,84 @@ function withMotion(create) {
   try { return create(); } finally { window.matchMedia = original; }
 }
 
+// Desktop (mouse or trackpad) gets its own slide spacing and pace; touch screens keep PhotoSwipe's defaults.
+const isDesktop = () => matchMedia('(hover: hover) and (pointer: fine)').matches;
+const DESKTOP_GAP = 32;          // white space between neighbouring photos while sliding (px)
+const GLIDE_MS = 560;            // arrow-key slide on desktop
+const GLIDE_MIN_MS = 280, GLIDE_MAX_MS = 640;
+
+// Desktop slide motion. It starts at exactly the speed the photos already have (from a drag, or from a slide
+// still in progress when an arrow is pressed again) and eases to rest without overshoot. When that speed is
+// enough to arrive on its own, it is a pure, constant deceleration; otherwise it gently speeds up first.
+let carriedVelocity = 0;        // px/ms of a slide interrupted by the next one
+let lastGlideFrame = 0;         // time of the last frame a slide drew
+class Glide {
+  constructor(props) {
+    this.props = props;
+    this.onFinish = () => {};
+    const delta = props.start - props.end;            // remaining distance (signed)
+    const distance = Math.abs(delta);
+    let velocity = props.velocity || carriedVelocity;  // px/ms
+    // Continuing an interrupted slide: start the clock at its last drawn frame so no frame is skipped.
+    const now = performance.now();
+    this.startTime = carriedVelocity && now - lastGlideFrame < 50 ? lastGlideFrame : now;
+    carriedVelocity = 0;
+    const towards = velocity * delta < 0;
+    let duration = GLIDE_MS;
+    if (velocity && towards && distance > 1) duration = Math.max(GLIDE_MIN_MS, Math.min(GLIDE_MAX_MS, 2 * distance / Math.abs(velocity)));
+    if (velocity && towards && distance > 1) duration = Math.min(duration, 2.9 * distance / Math.abs(velocity)); // never overshoot
+    if (!velocity || !towards) duration = GLIDE_MS;
+    this.delta = delta; this.velocity = velocity; this.duration = duration;
+    const frame = () => {
+      const now = performance.now();
+      lastGlideFrame = now;
+      const s = Math.max(0, Math.min(1, (now - this.startTime) / this.duration));
+      if (s >= 1) { this._raf = 0; props.onUpdate(props.end); props.onComplete?.(); this.onFinish(); return; }
+      props.onUpdate(props.end + this.position(s));
+      this._raf = requestAnimationFrame(frame);
+    };
+    this._raf = requestAnimationFrame(frame);
+  }
+  // Cubic Hermite curve: starts at `delta` with the given speed, ends at 0 with zero speed.
+  position(s) {
+    const t = this.duration * this.velocity;
+    return this.delta * (2 * s ** 3 - 3 * s ** 2 + 1) + t * (s ** 3 - 2 * s ** 2 + s);
+  }
+  speed(s) {
+    return (this.delta * (6 * s ** 2 - 6 * s) + this.duration * this.velocity * (3 * s ** 2 - 4 * s + 1)) / this.duration;
+  }
+  destroy() {
+    if (this._raf) {
+      const s = Math.min(1, (performance.now() - this.startTime) / this.duration);
+      carriedVelocity = this.speed(s);
+      cancelAnimationFrame(this._raf);
+    }
+    this._raf = 0;
+  }
+}
+
+// On desktop the hero is much wider than a portrait photo. With PhotoSwipe's default spacing each photo would
+// travel the full width of the box per move, which reads as photos flying off. Instead neighbours sit just
+// beyond the edge of the box, so they are fully hidden at rest and slide in from the edge.
+function desktopSpacing(size, items) {
+  const widest = Math.max(...items.map(item => Math.min(size.x, size.y * item.width / item.height)));
+  return (size.x / 2 + widest / 2 + DESKTOP_GAP - size.x) / size.x;
+}
+
 function openPhoto(index) {
   if (pswp) return;
+  const desktop = isDesktop();
+  const items = photos.map(slideData);
   const instance = withMotion(() => new PhotoSwipe({
-    dataSource: photos.map(slideData),
+    dataSource: items,
     index,
     appendToEl: viewport,
     mainClass: 'pswp--inline',
-    getViewportSizeFn: () => ({x: viewport.clientWidth, y: viewport.clientHeight}),
+    getViewportSizeFn: options => {
+      const size = {x: viewport.clientWidth, y: viewport.clientHeight};
+      if (desktop) options.spacing = desktopSpacing(size, items);
+      return size;
+    },
     padding: {top: 0, bottom: 0, left: 0, right: 0},
     bgOpacity: 1,
     spacing: 0.06,
@@ -189,6 +259,48 @@ function openPhoto(index) {
     errorMsg: '',
   }));
   pswp = instance;
+  if (desktop) {
+    // Slides between photos (drag release and arrow keys) use the Glide above; zoom and pan keep PhotoSwipe's springs.
+    const animations = instance.animations;
+    const startSpring = animations.startSpring.bind(animations);
+    animations.startSpring = props => {
+      if (!props.isMainScroll) return startSpring(props);
+      const glide = new Glide(props);
+      animations.activeAnimations.push(glide);
+      glide.onFinish = () => animations.stop(glide);
+      return glide;
+    };
+  }
+  // Arrow keys slide to the next photo instead of cutting; rapid presses queue up naturally.
+  instance.on('keydown', event => {
+    const key = event.originalEvent;
+    if (key.altKey || key.ctrlKey || key.metaKey || key.shiftKey) return;
+    if (key.key !== 'ArrowLeft' && key.key !== 'ArrowRight') return;
+    event.preventDefault();
+    key.preventDefault();
+    instance.mainScroll.moveIndexBy(key.key === 'ArrowRight' ? 1 : -1, true);
+  });
+  // Every slide shows its thumbnail straight away (not just the first), so a photo never appears blank.
+  instance.addFilter('placeholderSrc', (source, content) => content.data.msrc || source);
+  // Cross-fade: the full-size image is only added once it is fully loaded and decoded, then fades in
+  // over the thumbnail, which stays underneath until the fade is done.
+  instance.on('contentAppendImage', event => {
+    const {content} = event;
+    const image = content.element;
+    if (!image || image.tagName !== 'IMG' || image.dataset.ready) return;
+    event.preventDefault();
+    if (image.dataset.waiting) return;
+    image.dataset.waiting = '1';
+    const loaded = image.complete && image.naturalWidth
+      ? Promise.resolve()
+      : new Promise(resolve => { image.addEventListener('load', resolve, {once: true}); image.addEventListener('error', resolve, {once: true}); });
+    loaded.then(() => image.decode?.()).catch(() => {}).then(() => {
+      image.dataset.ready = '1';
+      image.classList.add('photo-fade');
+      content.appendImage();
+      requestAnimationFrame(() => requestAnimationFrame(() => image.classList.add('photo-fade--in')));
+    });
+  });
   const placeInHero = () => {
     // Pointer positions are measured relative to the hero box rather than the page.
     const rect = viewport.getBoundingClientRect();

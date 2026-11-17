@@ -542,3 +542,6 @@ button:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
 @media (hover: none) {
   body.photo-open .page { cursor: pointer; }
 }
+/* Full-size photo fades in over its thumbnail once decoded. */
+.pswp--inline .pswp__img.photo-fade { opacity: 0; transition: opacity 400ms ease; }
+.pswp--inline .pswp__img.photo-fade.photo-fade--in { opacity: 1; }
