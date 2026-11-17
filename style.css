@@ -516,3 +516,9 @@ button:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
 .photo-close:focus { outline: none; }
 .photo-close:focus-visible { outline: 1px dotted #777; outline-offset: -5px; }
 .photo-neighbor { pointer-events: none; }
+.stage-services, .stage-about { min-height: calc((100cqw - 30px) / 2 + 10px); }
+.stage-services.is-active, .stage-about.is-active { display: flex; align-items: center; }
+.stage-services .about-box, .stage-about .about-box { height: auto; padding-top: 0; padding-bottom: 0; }
+@media (max-width: 700px) {
+  .stage-services, .stage-about { min-height: 100cqw; }
+}
