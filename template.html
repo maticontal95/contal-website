@@ -8,6 +8,7 @@
   <title>{{title}}</title>
   <meta name="description" content="{{description}}">
   <link rel="canonical" href="https://contal.work/">  
+  <link rel="stylesheet" href="vendor/photoswipe/photoswipe.css">
   <link rel="stylesheet" href="style.css">
   <meta property="og:title" content="{{title}}">
   <meta property="og:description" content="{{description}}">
@@ -45,11 +46,7 @@
           <div class="stage-panel stage-home is-active" data-stage="home">
             <div class="gallery-viewport" {{gallery_label}}>
               <div class="gallery-scroll"><div class="site-gallery">{{photos}}</div></div>
-              <div class="photo-viewer" hidden role="region" {{gallery_label}}>
-                <div class="photo-frame"><img class="photo-low" alt=""><img class="photo-high" alt=""></div>
-                <p class="photo-caption"></p>
-                <button class="photo-close" type="button" {{close_label}}><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 4 20 20M20 4 4 20" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="square"/></svg></button>
-              </div>
+              <span class="photo-close-label" hidden {{close_label}}></span>
             </div>
           </div>
           <div class="stage-panel stage-services" data-stage="services">
@@ -77,6 +74,6 @@
     </footer>
   </div>
 
-<script src="script.js"></script>
+<script type="module" src="script.js"></script>
 </body>
 </html>

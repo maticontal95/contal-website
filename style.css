@@ -487,19 +487,10 @@ button:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
 /* Fixed gallery viewport and contained image expansion. */
 .stage { container-type: inline-size; }
 .gallery-viewport { position: relative; width: 100%; height: calc((100cqw - 30px) / 2 + 10px); overflow: hidden; isolation: isolate; background: white; }
-.gallery-scroll { height: 100%; overflow-y: auto; overscroll-behavior: none; scrollbar-width: none; transition: opacity 990ms ease; }
+.gallery-scroll { height: 100%; overflow-y: auto; overscroll-behavior: none; scrollbar-width: none; }
 .gallery-scroll::-webkit-scrollbar { display: none; }
-.is-viewing .gallery-scroll { opacity: 0; pointer-events: none; overflow: hidden; }
 .site-gallery { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
 .gallery-item { min-width: 0; }
-.photo-viewer { position: absolute; inset: 0; z-index: 2; touch-action: pan-y; }
-.photo-viewer[hidden] { display: none; }
-.photo-frame { position: absolute; overflow: hidden; pointer-events: none; }
-.photo-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.photo-high { opacity: 0; transition: opacity 240ms ease; }
-.photo-high.is-loaded { opacity: 1; }
-.photo-close { position: absolute; right: 4px; top: 4px; width: 36px; height: 36px; font: 26px/1 Arial,sans-serif; background: rgba(255,255,255,.85); border: none; cursor: pointer; }
-.photo-caption { position: absolute; bottom: 0; left: 40px; right: 40px; max-height: 40px; overflow: auto; text-align: center; font-size: 13px; }
 .subtitle { white-space: pre-line; }
 .about-content [hidden] { display: none; }
 @media (max-width: 700px) {
@@ -509,7 +500,6 @@ button:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
 
 
 
-.photo-neighbor { pointer-events: none; }
 .stage-services, .stage-about { min-height: calc((100cqw - 30px) / 2 + 10px); }
 .stage-services.is-active, .stage-about.is-active { display: flex; align-items: center; }
 .stage-services .about-box, .stage-about .about-box { height: auto; padding-top: 0; padding-bottom: 0; }
@@ -517,20 +507,7 @@ button:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
   .stage-services, .stage-about { min-height: 100cqw; }
 }
 
-/* Close button: a drawn black X with no box, border or focus rectangle. */
-.photo-close { display: grid; place-items: center; padding: 0; margin: 0; color: #000; background: transparent; border: 0; border-radius: 50%; box-shadow: none; outline: none; appearance: none; -webkit-appearance: none; cursor: pointer; opacity: 0; transition: opacity 500ms ease, background-color 150ms ease; }
-.photo-close::-moz-focus-inner { border: 0; padding: 0; }
-.photo-close:focus, .photo-close:active { outline: none; box-shadow: none; }
-.photo-close svg { display: block; width: 18px; height: 18px; pointer-events: none; }
-.photo-close svg path { stroke: #000; }
-.photo-close:focus-visible { background-color: rgba(0, 0, 0, .07); }
-.is-viewing .photo-close { opacity: 1; transition-delay: 250ms, 0ms; }
-.photo-high.no-fade { transition: none; }
 
-/* On touch screens, mark the page as tappable while a photo is open so iPhone Safari delivers taps on empty areas. */
-@media (hover: none) {
-  body.photo-open .page { cursor: pointer; }
-}
 
 /* Copy in the Services and About panels sits exactly in the middle of the hero area. */
 .about-content [data-language] > :first-child { margin-top: 0; }
@@ -552,4 +529,16 @@ button:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
   .about-content { --copy-size: clamp(0.85rem, 2.6vw, 2.6rem); --initial-size: clamp(1rem, 2vw, 2.4rem); --ornament-size: 1rem; }
 }
 
-.no-transition, .no-transition * { transition: none !important; }
+
+/* Photo viewer (PhotoSwipe) shown inside the hero box on white, not over the whole screen. */
+.pswp.pswp--inline { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; --pswp-bg: #fff; --pswp-placeholder-bg: transparent; --pswp-root-z-index: 2; }
+.pswp--inline .pswp__top-bar { height: 44px; }
+.pswp--inline .pswp__button--close { display: grid; place-items: center; width: 36px; height: 36px; margin: 4px 4px 0 0; border-radius: 50%; background: transparent; outline: none; box-shadow: none; -webkit-appearance: none; appearance: none; }
+.pswp--inline .pswp__button--close .pswp__icn { position: static; width: 18px; height: 18px; fill: none; overflow: visible; }
+.pswp--inline .pswp__button--close:focus { outline: none; }
+.pswp--inline .pswp__button--close:focus-visible { background-color: rgba(0, 0, 0, .07); }
+.pswp--inline .photo-caption { position: absolute; bottom: 0; left: 40px; right: 40px; max-height: 40px; overflow: auto; text-align: center; font-size: 13px; color: #000; }
+.pswp--inline .photo-caption[hidden] { display: none; }
+@media (hover: none) {
+  body.photo-open .page { cursor: pointer; }
+}
