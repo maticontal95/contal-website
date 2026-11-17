@@ -9,7 +9,6 @@ const low = document.querySelector('.photo-low');
 const high = document.querySelector('.photo-high');
 const caption = document.querySelector('.photo-caption');
 const closeButton = document.querySelector('.photo-close');
-const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const metadata = JSON.parse(document.querySelector('#page-metadata').textContent);
 
 // Timings (ms).
@@ -19,7 +18,6 @@ const SLIDE_MS = 560;       // arrow-key slide between photos
 const SLIDE_EASE = 'cubic-bezier(.45,.05,.25,1)';
 const FADE_OUT_MS = 260;    // fade-through-white for text and hero
 const FADE_IN_MS = 320;
-const ms = value => reducedMotion.matches ? 0 : value;
 
 let language = 'en';
 try { language = localStorage.getItem('lang') === 'fr' ? 'fr' : 'en'; } catch {}
@@ -130,9 +128,9 @@ document.querySelector('#lang-toggle').addEventListener('click', () => {
 });
 document.querySelectorAll('.menu-link').forEach(button => button.addEventListener('click', () => {
   if (button.classList.contains('is-active')) return;
-  closePhoto(false);
   document.querySelectorAll('.menu-link').forEach(item => item.classList.toggle('is-active', item === button));
   fadeThrough([stage], () => {
+    closePhoto(false);
     document.querySelectorAll('.stage-panel').forEach(panel => panel.classList.toggle('is-active', panel.dataset.stage === button.dataset.panel));
     fitCopy();
   });
@@ -210,7 +208,7 @@ function openPhoto(index) {
     if (token !== version) return;
     const target = targetRect(low);
     position(target);
-    animation = frame.animate([cssRect(start), cssRect(target)], {duration: ms(ZOOM_MS), easing: ZOOM_EASE});
+    animation = frame.animate([cssRect(start), cssRect(target)], {duration: ZOOM_MS, easing: ZOOM_EASE});
   };
   if (low.complete && low.naturalWidth) ready(); else low.onload = ready;
 }
@@ -243,13 +241,14 @@ function closePhoto(animate = true) {
   if (top + button.offsetHeight > scroller.scrollTop + scroller.clientHeight) scroller.scrollTop = top + button.offsetHeight - scroller.clientHeight;
   const target = relativeRect(button);
   button.style.visibility = 'hidden';
+  if (!animate) { viewport.classList.add('no-transition'); requestAnimationFrame(() => requestAnimationFrame(() => viewport.classList.remove('no-transition'))); }
   viewport.classList.remove('is-viewing');
   document.body.classList.remove('photo-open');
   viewer.classList.add('is-closing');
   caption.textContent = '';
   position(target);
   // The reverse of the opening: the photo shrinks back into its thumbnail as the gallery fades back in.
-  animation = frame.animate([cssRect(start), cssRect(target)], {duration: animate ? ms(ZOOM_MS) : 0, easing: ZOOM_EASE});
+  animation = frame.animate([cssRect(start), cssRect(target)], {duration: animate ? ZOOM_MS : 0, easing: ZOOM_EASE});
   const restoreFocus = animate && viewer.contains(document.activeElement);
   animation.finished.then(() => finishClose(previous, restoreFocus)).catch(() => finishClose(previous, restoreFocus));
 }
@@ -296,7 +295,25 @@ function clearNeighbor() {
   neighbor?.remove(); neighbor = null;
   frame.style.transform = '';
 }
-async function navigate(direction, offset = 0, speed = 0) {
+// After a slide, swap the incoming photo into the main frame underneath the neighbour, then drop the neighbour.
+async function completeSlide(direction, incoming, token, cleanup) {
+  if (token !== version || closing) return;
+  const incomingHigh = incoming.querySelector('.photo-high');
+  setPhoto(active + direction, true);
+  position(targetRect(incoming.querySelector('img')));
+  if (incomingHigh.classList.contains('is-loaded')) { high.src = incomingHigh.src; high.classList.add('is-loaded'); }
+  try { await Promise.all([low.decode(), high.getAttribute('src') ? high.decode() : null]); } catch {}
+  cleanup?.();
+  slideAnimations = [];
+  if (closing) return;
+  clearNeighbor();
+  requestAnimationFrame(() => high.classList.remove('no-fade'));
+  sliding = false;
+  if (queue.length) navigate(queue.shift());
+}
+
+// Arrow keys: an even glide from rest to rest.
+async function navigate(direction) {
   if (active < 0 || closing || photos.length < 2) return;
   if (sliding) { if (queue.length < 3) queue.push(direction); return; }
   sliding = true;
@@ -305,31 +322,40 @@ async function navigate(direction, offset = 0, speed = 0) {
   if (!neighbor || Number(neighbor.dataset.direction) !== direction) prepareNeighbor(direction);
   const incoming = neighbor;
   const distance = stripDistance(direction);
-  // A swipe continues at the finger's speed; arrow keys use a full, even glide.
-  const remaining = distance - Math.abs(offset);
-  const fromSwipe = offset !== 0;
-  const glide = speed > 0.05 ? remaining / speed * 2.2 : SLIDE_MS * remaining / distance + 200;
-  const duration = fromSwipe ? Math.max(340, Math.min(620, glide)) : ms(SLIDE_MS);
-  const options = {duration, easing: fromSwipe ? 'cubic-bezier(.25,.8,.35,1)' : SLIDE_EASE, fill: 'forwards'};
+  const options = {duration: SLIDE_MS, easing: SLIDE_EASE, fill: 'forwards'};
   frame.style.transform = incoming.style.transform = '';
-  const outgoingAnimation = frame.animate([{transform: `translateX(${offset}px)`}, {transform: `translateX(${-direction * distance}px)`}], options);
-  const incomingAnimation = incoming.animate([{transform: `translateX(${offset + direction * distance}px)`}, {transform: 'translateX(0)'}], options);
+  const outgoingAnimation = frame.animate([{transform: 'translateX(0)'}, {transform: `translateX(${-direction * distance}px)`}], options);
+  const incomingAnimation = incoming.animate([{transform: `translateX(${direction * distance}px)`}, {transform: 'translateX(0)'}], options);
   slideAnimations = [outgoingAnimation, incomingAnimation];
   await Promise.all([outgoingAnimation.finished, incomingAnimation.finished]).catch(() => {});
-  if (token !== version || closing) return;
-  // Swap the incoming photo into the main frame underneath the neighbour, then remove the neighbour.
-  const incomingHigh = incoming.querySelector('.photo-high');
-  setPhoto(active + direction, true);
-  position(targetRect(incoming.querySelector('img')));
-  if (incomingHigh.classList.contains('is-loaded')) { high.src = incomingHigh.src; high.classList.add('is-loaded'); }
-  try { await Promise.all([low.decode(), high.getAttribute('src') ? high.decode() : null]); } catch {}
-  outgoingAnimation.cancel(); incomingAnimation.cancel();
-  slideAnimations = [];
-  if (closing) return;
-  clearNeighbor();
-  requestAnimationFrame(() => high.classList.remove('no-fade'));
-  sliding = false;
-  if (queue.length) navigate(queue.shift());
+  await completeSlide(direction, incoming, token, () => { outgoingAnimation.cancel(); incomingAnimation.cancel(); });
+}
+
+// Swipes: a critically damped spring that starts at exactly the finger's position and speed,
+// so the motion stays continuous through the release and eases to rest without a jump.
+let springFrame = 0;
+function springStrip(from, velocity, to, token) {
+  cancelAnimationFrame(springFrame);
+  return new Promise(resolve => {
+    const x0 = from - to;
+    // Stiffness is matched to the release so the strip neither speeds up nor brakes abruptly as the finger
+    // lifts: zero initial acceleration where possible, kept within a range that feels neither floaty nor snappy.
+    const towards = x0 !== 0 && Math.sign(velocity) === -Math.sign(x0);
+    const SPRING = Math.min(0.02, Math.max(0.011, towards ? 2 * Math.abs(velocity) / Math.abs(x0) : 0.011));
+    const b = velocity + SPRING * x0;
+    const start = performance.now();
+    const step = now => {
+      if (token !== version || closing) { resolve(false); return; }
+      const t = now - start;
+      const decay = Math.exp(-SPRING * t);
+      const x = (x0 + b * t) * decay;
+      const v = (velocity - SPRING * b * t) * decay;
+      if (Math.abs(x) < 0.4 && Math.abs(v) < 0.01) { moveStrip(to); resolve(true); return; }
+      moveStrip(to + x);
+      springFrame = requestAnimationFrame(step);
+    };
+    springFrame = requestAnimationFrame(step);
+  });
 }
 
 photos.forEach((button, index) => button.addEventListener('click', event => { event.stopPropagation(); openPhoto(index); }));
@@ -360,7 +386,7 @@ viewer.addEventListener('touchstart', event => {
   if (event.touches.length !== 1 || closing || sliding || event.target.closest('button')) { drag = null; return; }
   animation?.finish();
   const touch = event.touches[0];
-  drag = {x: touch.clientX, y: touch.clientY, dx: 0, direction: 0, time: performance.now(), lastX: touch.clientX, lastTime: performance.now(), speed: 0};
+  drag = {x: touch.clientX, y: touch.clientY, dx: 0, direction: 0, samples: [{t: performance.now(), x: touch.clientX}]};
 }, {passive: true});
 viewer.addEventListener('touchmove', event => {
   if (!drag || event.touches.length !== 1) return;
@@ -368,35 +394,43 @@ viewer.addEventListener('touchmove', event => {
   const dx = touch.clientX - drag.x;
   const dy = touch.clientY - drag.y;
   if (!drag.direction && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) { drag = null; return; }
+  const now = performance.now();
+  drag.samples.push({t: now, x: touch.clientX});
+  while (drag.samples.length > 2 && now - drag.samples[0].t > 120) drag.samples.shift();
   if (Math.abs(dx) < 8 && !drag.direction) return;
   event.preventDefault();
-  const now = performance.now();
-  if (now > drag.lastTime) drag.speed = (touch.clientX - drag.lastX) / (now - drag.lastTime);
-  drag.lastX = touch.clientX; drag.lastTime = now;
   const direction = dx < 0 ? 1 : -1;
   if (direction !== drag.direction) prepareNeighbor(direction);
   drag.direction = direction; drag.dx = dx;
   moveStrip(dx);
 }, {passive: false});
-function releaseDrag(cancelled = false) {
+// Finger speed (px/ms), averaged over the last ~100 ms so one noisy touch event can't skew it.
+function releaseVelocity(samples) {
+  const now = performance.now();
+  const recent = samples.filter(sample => now - sample.t <= 100);
+  if (recent.length < 2) return 0;
+  const first = recent[0], last = recent[recent.length - 1];
+  return last.t > first.t ? (last.x - first.x) / (last.t - first.t) : 0;
+}
+async function releaseDrag(cancelled = false) {
   if (!drag) return;
-  const {dx, direction, speed} = drag;
+  const {dx, direction, samples} = drag;
   drag = null;
-  if (!direction) return;
+  if (!direction || !neighbor) return;
   ignoreClickUntil = Date.now() + 500;
-  const flick = Math.sign(speed) === -direction && Math.abs(speed) > 0.35;
-  if (!cancelled && (Math.abs(dx) > 45 || flick)) { navigate(direction, dx, Math.abs(speed)); return; }
-  // Not far enough: spring both photos back into place.
-  const options = {duration: 320, easing: 'cubic-bezier(.25,.8,.35,1)'};
-  const incoming = neighbor;
+  const velocity = cancelled ? 0 : releaseVelocity(samples);
   const distance = stripDistance(direction);
-  frame.style.transform = '';
-  frame.animate([{transform: `translateX(${dx}px)`}, {transform: 'translateX(0)'}], options);
-  if (incoming) {
-    incoming.style.transform = `translateX(${direction * distance}px)`;
-    incoming.animate([{transform: `translateX(${dx + direction * distance}px)`}, {transform: `translateX(${direction * distance}px)`}], options)
-      .finished.then(() => { if (neighbor === incoming && !drag && !sliding) clearNeighbor(); }).catch(() => {});
-  }
+  // Where the strip would coast to: decide by projected position, not by where the finger lifted.
+  const travelled = -direction * (dx + velocity * 200);
+  const advance = !cancelled && photos.length > 1 && travelled > Math.min(distance * 0.3, 100);
+  const token = version;
+  const incoming = neighbor;
+  sliding = true;
+  const settled = await springStrip(dx, velocity, advance ? -direction * distance : 0, token);
+  if (!settled) return;
+  if (advance) { await completeSlide(direction, incoming, token); return; }
+  clearNeighbor();
+  sliding = false;
 }
 viewer.addEventListener('touchend', () => releaseDrag(), {passive: true});
 viewer.addEventListener('touchcancel', () => releaseDrag(true), {passive: true});
