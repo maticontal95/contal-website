@@ -5,22 +5,265 @@ backend:
 media_folder: assets/uploads
 public_folder: /assets/uploads
 collections:
-  - name: site
-    label: Site
-    files:
-      - name: gallery
-        label: Photos
-        file: gallery.json
+- name: site
+  label: Site
+  files:
+  - name: gallery
+    label: Photos
+    file: gallery.json
+    fields:
+    - name: photos
+      label: Photos
+      label_singular: Photo
+      hint: Add a photo, choose its image, then publish. Uploading to Media alone
+        does not add it to this gallery.
+      widget: list
+      summary: '{{fields.image}}'
+      fields:
+      - name: image
+        label: Photo
+        widget: image
+      - name: caption_fr
+        label: Légende française
+        widget: string
+        required: false
+      - name: caption_en
+        label: English caption
+        widget: string
+        required: false
+      - name: alt_fr
+        label: Description accessible française
+        widget: string
+        required: false
+      - name: alt_en
+        label: English accessible description
+        widget: string
+        required: false
+  - name: text
+    label: All website text
+    file: content.json
+    fields:
+    - name: header
+      label: Header
+      widget: object
+      fields:
+      - name: name
+        label: Name
+        widget: string
+        required: false
+      - name: subtitle_en
+        label: Subtitle — english
+        widget: text
+        required: false
+      - name: subtitle_fr
+        label: Subtitle — français
+        widget: text
+        required: false
+    - name: navigation
+      label: Navigation
+      widget: object
+      fields:
+      - name: home_en
+        label: Home — english
+        widget: string
+        required: false
+      - name: home_fr
+        label: Home — français
+        widget: string
+        required: false
+      - name: services_en
+        label: Services — english
+        widget: string
+        required: false
+      - name: services_fr
+        label: Services — français
+        widget: string
+        required: false
+      - name: about_en
+        label: About — english
+        widget: string
+        required: false
+      - name: about_fr
+        label: About — français
+        widget: string
+        required: false
+      - name: language_en
+        label: Language — english
+        widget: string
+        required: false
+      - name: language_fr
+        label: Language — français
+        widget: string
+        required: false
+    - name: contact
+      label: Contact
+      widget: object
+      fields:
+      - name: license
+        label: License
+        widget: string
+        required: false
+      - name: email
+        label: Email
+        widget: string
+        required: false
+      - name: phone
+        label: Phone
+        widget: string
+        required: false
+    - name: metadata
+      label: Metadata
+      widget: object
+      fields:
+      - name: title_en
+        label: Title — english
+        widget: string
+        required: false
+      - name: title_fr
+        label: Title — français
+        widget: string
+        required: false
+      - name: description_en
+        label: Description — english
+        widget: text
+        required: false
+      - name: description_fr
+        label: Description — français
+        widget: text
+        required: false
+    - name: interface
+      label: Interface
+      widget: object
+      fields:
+      - name: navigation_en
+        label: Navigation — english
+        widget: string
+        required: false
+      - name: navigation_fr
+        label: Navigation — français
+        widget: string
+        required: false
+      - name: open_en
+        label: Open — english
+        widget: string
+        required: false
+      - name: open_fr
+        label: Open — français
+        widget: string
+        required: false
+      - name: close_en
+        label: Close — english
+        widget: string
+        required: false
+      - name: close_fr
+        label: Close — français
+        widget: string
+        required: false
+      - name: gallery_en
+        label: Gallery — english
+        widget: string
+        required: false
+      - name: gallery_fr
+        label: Gallery — français
+        widget: string
+        required: false
+      - name: language_en
+        label: Language — english
+        widget: string
+        required: false
+      - name: language_fr
+        label: Language — français
+        widget: string
+        required: false
+    - name: about
+      label: About
+      widget: object
+      fields:
+      - name: en
+        label: English
+        widget: list
+        label_singular: Text block
+        summary: '{{fields.text}}'
         fields:
-          - name: photos
-            label: Photos
-            label_singular: Photo
-            hint: 'Add a photo, choose its image, then publish. Uploading to Media alone does not add it to this gallery.'
-            widget: list
-            summary: '{{fields.image}}'
-            fields:
-              - {name: image, label: Photo, widget: image}
-              - {name: caption_fr, label: Légende française, widget: string, required: false}
-              - {name: caption_en, label: English caption, widget: string, required: false}
-              - {name: alt_fr, label: Description accessible française, widget: string, required: false}
-              - {name: alt_en, label: English accessible description, widget: string, required: false}
+        - name: text
+          label: Text
+          widget: markdown
+          buttons:
+          - bold
+          - italic
+          - link
+          editor_components: []
+        - name: style
+          label: Style
+          widget: select
+          options:
+          - paragraph
+          - initial
+          - ornament
+      - name: fr
+        label: Français
+        widget: list
+        label_singular: Text block
+        summary: '{{fields.text}}'
+        fields:
+        - name: text
+          label: Text
+          widget: markdown
+          buttons:
+          - bold
+          - italic
+          - link
+          editor_components: []
+        - name: style
+          label: Style
+          widget: select
+          options:
+          - paragraph
+          - initial
+          - ornament
+    - name: services
+      label: Services
+      widget: object
+      fields:
+      - name: en
+        label: English
+        widget: list
+        label_singular: Text block
+        summary: '{{fields.text}}'
+        fields:
+        - name: text
+          label: Text
+          widget: markdown
+          buttons:
+          - bold
+          - italic
+          - link
+          editor_components: []
+        - name: style
+          label: Style
+          widget: select
+          options:
+          - paragraph
+          - initial
+          - ornament
+      - name: fr
+        label: Français
+        widget: list
+        label_singular: Text block
+        summary: '{{fields.text}}'
+        fields:
+        - name: text
+          label: Text
+          widget: markdown
+          buttons:
+          - bold
+          - italic
+          - link
+          editor_components: []
+        - name: style
+          label: Style
+          widget: select
+          options:
+          - paragraph
+          - initial
+          - ornament

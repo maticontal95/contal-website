@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <link rel="icon" href="/favicon.png" type="image/png">
+  <meta name="format-detection" content="telephone=no">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}}</title>
+  <meta name="description" content="{{description}}">
+  <link rel="canonical" href="https://contal.work/">  
+  <link rel="stylesheet" href="style.css">
+  <meta property="og:title" content="{{title}}">
+  <meta property="og:description" content="{{description}}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://contal.work/">
+  <meta property="og:image" content="https://contal.work/assets/montreal-duplex-renovation.jpeg">
+  <meta name="twitter:card" content="summary_large_image">
+  {{structured}}
+</head>
+<body>
+  <div class="page">
+    <header class="top-row">
+      <div class="brand">
+        <p>{{brand}}</p>
+      </div>
+
+      <div class="services"><p>{{subtitle}}</p></div>
+    </header>
+
+    <main class="content-row">
+      <nav class="pseudo-menu" {{nav_label}}>
+        <button class="menu-link is-active" data-panel="home" type="button">
+            {{nav_home}}
+        </button>
+        <button class="menu-link" data-panel="services" type="button">
+          {{nav_services}}
+      </button>
+        <button class="menu-link" data-panel="about" type="button">
+            {{nav_about}}
+        </button>
+      </nav>
+
+      <div class="stage-slot">
+        <div class="stage">
+          <div class="stage-panel stage-home is-active" data-stage="home">
+            <div class="gallery-viewport" {{gallery_label}}>
+              <div class="gallery-scroll"><div class="site-gallery">{{photos}}</div></div>
+              <div class="photo-viewer" hidden role="region" {{gallery_label}}>
+                <div class="photo-frame"><img class="photo-low" alt=""><img class="photo-high" alt=""></div>
+                <p class="photo-caption"></p>
+                <button class="photo-close" type="button" {{close_label}}>×</button>
+              </div>
+            </div>
+          </div>
+          <div class="stage-panel stage-services" data-stage="services">
+            <div class="about-box">
+                <div class="about-content" id="services-content">{{services}}</div>
+            </div>
+        </div>
+          <div class="stage-panel stage-about" data-stage="about">
+            <div class="about-box">
+              <div class="about-content" id="about-content">{{about}}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="menu-spacer" aria-hidden="true"></div>
+    </main>
+
+    <footer class="bottom-row">
+      <div class="contact"><p>{{contact}}</p></div>
+
+      <div class="lang">
+        <button id="lang-toggle" type="button" {{language_label}}>{{language}}</button>
+      </div>
+    </footer>
+  </div>
+
+<script src="script.js"></script>
+</body>
+</html>
