@@ -489,7 +489,7 @@ button:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
 /* Fixed gallery viewport and contained image expansion. */
 .stage { container-type: inline-size; }
 .gallery-viewport { position: relative; width: 100%; height: calc((100cqw - 30px) / 2 + 10px); overflow: hidden; isolation: isolate; background: white; }
-.gallery-scroll { height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; transition: opacity 660ms ease; }
+.gallery-scroll { height: 100%; overflow-y: auto; overscroll-behavior: none; scrollbar-width: none; transition: opacity 990ms ease; }
 .gallery-scroll::-webkit-scrollbar { display: none; }
 .is-viewing .gallery-scroll { opacity: 0; pointer-events: none; overflow: hidden; }
 .site-gallery { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
@@ -512,9 +512,7 @@ button:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
  .gallery-scroll,.photo-high { transition: none; }
 }
 
-.photo-close { color: #000; -webkit-text-fill-color: #000; appearance: none; -webkit-appearance: none; border: 0; box-shadow: none; background: transparent; }
-.photo-close:focus { outline: none; }
-.photo-close:focus-visible { outline: 1px dotted #777; outline-offset: -5px; }
+
 .photo-neighbor { pointer-events: none; }
 .stage-services, .stage-about { min-height: calc((100cqw - 30px) / 2 + 10px); }
 .stage-services.is-active, .stage-about.is-active { display: flex; align-items: center; }
@@ -522,3 +520,23 @@ button:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
 @media (max-width: 700px) {
   .stage-services, .stage-about { min-height: 100cqw; }
 }
+
+/* Close button: a drawn black X with no box, border or focus rectangle. */
+.photo-close { display: grid; place-items: center; padding: 0; margin: 0; color: #000; background: transparent; border: 0; border-radius: 50%; box-shadow: none; outline: none; appearance: none; -webkit-appearance: none; cursor: pointer; opacity: 0; transition: opacity 500ms ease, background-color 150ms ease; }
+.photo-close::-moz-focus-inner { border: 0; padding: 0; }
+.photo-close:focus, .photo-close:active { outline: none; box-shadow: none; }
+.photo-close svg { display: block; width: 18px; height: 18px; pointer-events: none; }
+.photo-close svg path { stroke: #000; }
+.photo-close:focus-visible { background-color: rgba(0, 0, 0, .07); }
+.is-viewing .photo-close { opacity: 1; transition-delay: 250ms, 0ms; }
+.photo-high.no-fade { transition: none; }
+
+/* On touch screens, mark the page as tappable while a photo is open so iPhone Safari delivers taps on empty areas. */
+@media (hover: none) {
+  body.photo-open .page { cursor: pointer; }
+}
+
+/* Copy in the Services and About panels sits exactly in the middle of the hero area. */
+.about-content [data-language] > :first-child { margin-top: 0; }
+.about-content [data-language] > :last-child { margin-bottom: 0; }
+.changed-letters { display: inline; }
