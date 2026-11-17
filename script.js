@@ -42,15 +42,38 @@ function translateText(element, nextText, animate) {
     if (textTransitions.get(element) === state) { element.textContent=nextText; textTransitions.delete(element); }
   }).catch(() => {});
 }
+let heroAnimation;
+let heroRevision = 0;
+let pendingPanelUpdate = null;
+function transitionHero(update, animate = true) {
+  const stage = document.querySelector('.stage');
+  const revision = ++heroRevision;
+  heroAnimation?.cancel();
+  // Finish any pending content switch before beginning another transition.
+  pendingPanelUpdate?.();
+  pendingPanelUpdate = update;
+  if (!animate || reducedMotion.matches) {
+    update(); pendingPanelUpdate = null; return;
+  }
+  heroAnimation = stage.animate([{opacity:1},{opacity:0}],{duration:180,fill:'forwards'});
+  heroAnimation.finished.then(() => {
+    if (revision !== heroRevision) return;
+    update(); pendingPanelUpdate = null;
+    heroAnimation.cancel();
+    heroAnimation = stage.animate([{opacity:0},{opacity:1}],{duration:240});
+  }).catch(() => {});
+}
 function applyLanguage(animate = false) {
   document.documentElement.lang = language;
   document.title = metadata['title_' + language];
   document.querySelector('meta[name="description"]').content = metadata['description_' + language];
   document.querySelectorAll('.translated').forEach(element => { translateText(element, element.dataset[language], animate); });
   document.querySelectorAll('[data-label-en]').forEach(element => { element.setAttribute('aria-label',element.dataset[language === 'en' ? 'labelEn' : 'labelFr']); });
-  document.querySelectorAll('[data-language]').forEach(element => { element.hidden = element.dataset.language !== language; });
-  photos.forEach(button => { button.querySelector('img').alt = button.dataset[language === 'en' ? 'altEn' : 'altFr']; });
-  if (active >= 0) updateCaption();
+  transitionHero(() => {
+    document.querySelectorAll('[data-language]').forEach(element => { element.hidden = element.dataset.language !== language; });
+    photos.forEach(button => { button.querySelector('img').alt = button.dataset[language === 'en' ? 'altEn' : 'altFr']; });
+    if (active >= 0) updateCaption();
+  }, animate);
 }
 function updateCaption() {
   caption.textContent = photos[active].dataset[language === 'en' ? 'captionEn' : 'captionFr'];
@@ -63,9 +86,12 @@ document.querySelector('#lang-toggle').onclick = () => {
   applyLanguage(true);
 };
 document.querySelectorAll('.menu-link').forEach(button => button.addEventListener('click', () => {
+  if (button.classList.contains('is-active')) return;
   closePhoto(false);
   document.querySelectorAll('.menu-link').forEach(item => item.classList.toggle('is-active',item === button));
-  document.querySelectorAll('.stage-panel').forEach(panel => panel.classList.toggle('is-active',panel.dataset.stage === button.dataset.panel));
+  transitionHero(() => {
+    document.querySelectorAll('.stage-panel').forEach(panel => panel.classList.toggle('is-active',panel.dataset.stage === button.dataset.panel));
+  });
 }));
 function targetRect(image) {
   const width = viewport.clientWidth;
