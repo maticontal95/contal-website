@@ -44,15 +44,47 @@ function imageSize(buffer) {
   return null;
 }
 const cdn = (source, width) => `/.netlify/images?url=${encodeURIComponent(source)}&w=${width}&fm=webp&q=78`;
+// "word^2" in the About text becomes a footnote mark that opens figure 2.
+const figureCount = (content.figures || []).length;
+const figureRefs = (html, lang) => html.replace(/\^(\d+)/g, (match, number) => {
+  if (Number(number) < 1 || Number(number) > figureCount) return match;
+  const label = `${content.interface?.['figure_' + lang] || 'Figure'} ${number}`;
+  return `<sup class="fig-ref"><button type="button" data-note="${number}" aria-label="${escape(label)}">${number}</button></sup>`;
+});
 function body(section) {
   return ['en', 'fr'].map(lang => `<div data-language="${lang}" ${lang === 'fr' ? 'hidden' : ''}>` + content[section][lang].map(block => {
     const style = ['paragraph', 'initial', 'ornament'].includes(block.style) ? block.style : 'paragraph';
-    const text = marked.parseInline(block.text || "");
+    const text = figureRefs(marked.parseInline(block.text || ""), lang);
     return style === 'ornament' ? `<div class="about-ornament">${text}</div>` : `<p class="${style}">${text}</p>`;
   }).join('\n') + '</div>').join('\n');
 }
+async function sizeAttributes(image) {
+  const size = await readFile(image.replace(/^\//,'')).then(imageSize).catch(() => null);
+  if (!size) return '';
+  const scale = 1800 / size.width;
+  return `data-width="${Math.round(size.width * scale)}" data-height="${Math.round(size.height * scale)}" `;
+}
+function assetPath(image) {
+  const source = '/' + String(image || '').replace(/^\//,'');
+  if (!source.startsWith('/assets/') || source.includes('..')) throw new Error('Invalid image path');
+  return source;
+}
+// Numbered plates of photos shown beside the About text (margin on desktop, a small row on phones).
+async function figuresHtml() {
+  const notes = content.figures || [];
+  const plates = await Promise.all(notes.map(async (note, noteIndex) => {
+    const number = noteIndex + 1;
+    const thumbs = await Promise.all((note.photos || []).map(async photo => {
+      const source = assetPath(photo.image);
+      return `<button class="figure-thumb" type="button" data-note="${number}" ${await sizeAttributes(source)}data-full="${escape(cdn(source,1800))}" data-caption-en="${escape(number + '\u2002' + (note.caption_en || ''))}" data-caption-fr="${escape(number + '\u2002' + (note.caption_fr || ''))}" data-alt-en="${escape(photo.alt_en)}" data-alt-fr="${escape(photo.alt_fr)}" aria-label="${escape(content.interface?.figure_en || 'Figure')} ${number}" data-label-en="${escape(content.interface?.figure_en || 'Figure')} ${number}" data-label-fr="${escape(content.interface?.figure_fr || 'Figure')} ${number}"><img src="${escape(cdn(source,320))}" srcset="${escape(cdn(source,160))} 160w, ${escape(cdn(source,320))} 320w" sizes="120px" alt="${escape(photo.alt_en)}" loading="lazy" decoding="async"></button>`;
+    }));
+    return `<figure class="figure-plate" data-note="${number}"><div class="figure-thumbs">${thumbs.join('')}</div><figcaption><span class="figure-number">${number}</span>${bilingual(note.caption_en, note.caption_fr, 'figure-caption')}</figcaption></figure>`;
+  }));
+  return `<aside class="about-figures" ${label(content.interface, 'figures')}><div class="about-figures-inner">${plates.join('')}</div></aside>`;
+}
 const sizes = await Promise.all(gallery.photos.map(photo => readFile(photo.image.replace(/^\//,'')).then(imageSize).catch(() => null)));
 const replacements = {
+  figures: await figuresHtml(),
   title: escape(content.metadata.title_en), description: escape(content.metadata.description_en),
   structured: `<script type="application/ld+json">${JSON.stringify({'@context':'https://schema.org','@type':'GeneralContractor',name:content.header.name,url:'https://contal.work',email:content.contact.email,telephone:content.contact.phone}).replaceAll('<','\\u003c')}</script>`,
   brand: escape(content.header.name), subtitle: bilingual(content.header.subtitle_en, content.header.subtitle_fr, 'subtitle'),
