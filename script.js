@@ -1,280 +1,404 @@
+import PhotoSwipe from './vendor/photoswipe/photoswipe.esm.min.js';
+
 const photos = [...document.querySelectorAll('.gallery-item')];
+const page = document.querySelector('.page');
+const stage = document.querySelector('.stage');
 const viewport = document.querySelector('.gallery-viewport');
 const scroller = document.querySelector('.gallery-scroll');
-const viewer = document.querySelector('.photo-viewer');
-const frame = document.querySelector('.photo-frame');
-const low = document.querySelector('.photo-low');
-const high = document.querySelector('.photo-high');
-const caption = document.querySelector('.photo-caption');
-const closeButton = document.querySelector('.photo-close');
-const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const closeLabel = document.querySelector('.photo-close-label');
+const metadata = JSON.parse(document.querySelector('#page-metadata').textContent);
+
+// Timings (ms).
+const ZOOM_MS = 990;        // photo opening / closing
+// Starts from rest, builds up gently, then settles in a long soft deceleration (no jolt at either end).
+const ZOOM_EASE = 'cubic-bezier(.35, 0, .1, 1)';
+const FADE_OUT_MS = 260;    // fade-through-white for text and hero
+const FADE_IN_MS = 320;
+
+let pswp = null;           // open PhotoSwipe instance, if any
 let language = 'en';
 try { language = localStorage.getItem('lang') === 'fr' ? 'fr' : 'en'; } catch {}
-let active = -1;
-let version = 0;
-let animation;
-const metadata = JSON.parse(document.querySelector('#page-metadata').textContent);
-const textTransitions = new WeakMap();
-function translateText(element, nextText, animate) {
-  const previous = textTransitions.get(element);
-  previous?.animation?.cancel();
-  if (previous) element.textContent = previous.target;
+
+/* ---------- Fade through white (language switch and section tabs) ---------- */
+
+let fadeAnimations = [];
+let pendingUpdate = null;
+let fadeToken = 0;
+// The hero fades through white by fading a white veil in over it and back out, rather than fading the hero's
+// own opacity. Safari does not always apply a fading parent's opacity to the photo viewer's GPU layers,
+// which made an open photo vanish abruptly instead of fading; a veil painted on top works in every browser.
+const veil = document.createElement('div');
+veil.className = 'stage-veil';
+veil.setAttribute('aria-hidden', 'true');
+stage.append(veil);
+const fadeElement = target => target === stage ? veil : target;
+function underlyingOpacity(element) {
+  if (element === veil) return 0;
+  return parseFloat(getComputedStyle(element).opacity) || 1;
+}
+// Opacity keyframes for "visible" (1) and "hidden" (0) — inverted for the veil.
+const shown = (element, visibility, base) => ({opacity: element === veil ? 1 - visibility : visibility * base});
+// Fades every target to white, applies the update, then fades everything back in together.
+function fadeThrough(targets, update, animate = true) {
+  // A transition already in progress is completed at once before starting the next one.
+  const current = new Map(fadeAnimations.map(item => [item.element, parseFloat(getComputedStyle(item.element).opacity)]));
+  fadeAnimations.forEach(item => item.animation.cancel());
+  fadeAnimations = [];
+  if (pendingUpdate) { const previous = pendingUpdate; pendingUpdate = null; previous(); }
+  const token = ++fadeToken;
+  if (!animate) { update(); return; }
+  pendingUpdate = update;
+  fadeAnimations = targets.map(fadeElement).map(element => {
+    const from = current.has(element) ? current.get(element) : (element === veil ? 0 : underlyingOpacity(element));
+    return {element, animation: element.animate([{opacity: from}, shown(element, 0, 1)], {duration: FADE_OUT_MS, easing: 'ease-in', fill: 'forwards'})};
+  });
+  Promise.all(fadeAnimations.map(item => item.animation.finished)).then(() => {
+    if (token !== fadeToken) return;
+    const run = pendingUpdate; pendingUpdate = null; run?.();
+    const outgoing = fadeAnimations;
+    fadeAnimations = targets.map(fadeElement).filter(element => element.isConnected).map(element => {
+      const old = outgoing.find(item => item.element === element);
+      old?.animation.cancel();
+      const base = underlyingOpacity(element);
+      return {element, animation: element.animate([shown(element, 0, base), shown(element, 1, base)], {duration: FADE_IN_MS, easing: 'ease-out'})};
+    });
+    outgoing.forEach(item => item.animation.cancel());
+    return Promise.all(fadeAnimations.map(item => item.animation.finished)).then(() => { if (token === fadeToken) fadeAnimations = []; });
+  }).catch(() => {});
+}
+
+// Prepares a bilingual label for a fade. Returns the element to fade and the text update.
+// In the subtitle only the letters that differ fade (the e/é in Renovation).
+function prepareTranslation(element, nextText) {
   const oldText = element.textContent;
-  if (!animate || reducedMotion.matches || oldText === nextText) { element.textContent = nextText; return; }
+  if (oldText === nextText) return null;
+  if (!element.classList.contains('subtitle')) return {target: element, update: () => { element.textContent = nextText; }};
   let start = 0;
   while (start < oldText.length && start < nextText.length && oldText[start] === nextText[start]) start++;
   let end = 0;
-  while (end < oldText.length-start && end < nextText.length-start && oldText[oldText.length-1-end] === nextText[nextText.length-1-end]) end++;
-  // Keep shared letters stationary in the subtitle. Other labels fade as a whole.
-  if (!element.classList.contains('subtitle')) { start=0; end=0; }
+  while (end < oldText.length - start && end < nextText.length - start && oldText[oldText.length - 1 - end] === nextText[nextText.length - 1 - end]) end++;
   const changed = document.createElement('span');
-  changed.textContent = oldText.slice(start,oldText.length-end);
-  element.replaceChildren(document.createTextNode(oldText.slice(0,start)),changed,document.createTextNode(end?oldText.slice(-end):''));
-  const state = {target:nextText,animation:changed.animate([{opacity:1},{opacity:0}],{duration:180,fill:'forwards'})};
-  textTransitions.set(element,state);
-  state.animation.finished.then(() => {
-    if (textTransitions.get(element) !== state) return;
-    changed.textContent = nextText.slice(start,nextText.length-end);
-    state.animation.cancel();
-    state.animation = changed.animate([{opacity:0},{opacity:1}],{duration:180});
-    return state.animation.finished;
-  }).then(() => {
-    if (textTransitions.get(element) === state) { element.textContent=nextText; textTransitions.delete(element); }
-  }).catch(() => {});
+  changed.className = 'changed-letters';
+  changed.textContent = oldText.slice(start, oldText.length - end);
+  element.replaceChildren(document.createTextNode(oldText.slice(0, start)), changed, document.createTextNode(end ? oldText.slice(-end) : ''));
+  return {target: changed, update: () => { changed.textContent = nextText.slice(start, nextText.length - end); }};
 }
-let heroAnimation;
-let heroRevision = 0;
-let pendingPanelUpdate = null;
-function transitionHero(update, animate = true) {
-  const stage = document.querySelector('.stage');
-  const revision = ++heroRevision;
-  heroAnimation?.cancel();
-  // Finish any pending content switch before beginning another transition.
-  pendingPanelUpdate?.();
-  pendingPanelUpdate = update;
-  if (!animate || reducedMotion.matches) {
-    update(); pendingPanelUpdate = null; return;
-  }
-  heroAnimation = stage.animate([{opacity:1},{opacity:0}],{duration:180,fill:'forwards'});
-  heroAnimation.finished.then(() => {
-    if (revision !== heroRevision) return;
-    update(); pendingPanelUpdate = null;
-    heroAnimation.cancel();
-    heroAnimation = stage.animate([{opacity:0},{opacity:1}],{duration:240});
-  }).catch(() => {});
+
+/* ---------- Hero copy always fits the fixed hero box ---------- */
+
+function fitCopy() {
+  document.querySelectorAll('.stage-services, .stage-about').forEach(panel => {
+    const content = panel.querySelector('.about-content');
+    const box = panel.querySelector('.about-box');
+    content.style.setProperty('--fit', 1);
+    if (!panel.classList.contains('is-active')) return;
+    const available = box.clientHeight;
+    if (content.offsetHeight <= available) return;
+    // Largest text size (down to half) at which the copy fits.
+    let low = 0.5, high = 1;
+    for (let step = 0; step < 8; step++) {
+      const middle = (low + high) / 2;
+      content.style.setProperty('--fit', middle.toFixed(4));
+      if (content.offsetHeight <= available) low = middle; else high = middle;
+    }
+    content.style.setProperty('--fit', low.toFixed(4));
+  });
 }
+new ResizeObserver(() => fitCopy()).observe(stage);
+document.fonts?.ready.then(fitCopy);
+
 function applyLanguage(animate = false) {
   document.documentElement.lang = language;
   document.title = metadata['title_' + language];
   document.querySelector('meta[name="description"]').content = metadata['description_' + language];
-  document.querySelectorAll('.translated').forEach(element => { translateText(element, element.dataset[language], animate); });
-  document.querySelectorAll('[data-label-en]').forEach(element => { element.setAttribute('aria-label',element.dataset[language === 'en' ? 'labelEn' : 'labelFr']); });
-  transitionHero(() => {
+  document.querySelectorAll('[data-label-en]').forEach(element => { element.setAttribute('aria-label', element.dataset[language === 'en' ? 'labelEn' : 'labelFr']); });
+  // Complete any half-finished fade first so labels hold their final text before diffing.
+  if (pendingUpdate) fadeThrough([], () => {}, false);
+  const labels = [...document.querySelectorAll('.translated')].map(element => prepareTranslation(element, element.dataset[language])).filter(Boolean);
+  fadeThrough([...labels.map(item => item.target), stage], () => {
+    labels.forEach(item => item.update());
     document.querySelectorAll('[data-language]').forEach(element => { element.hidden = element.dataset.language !== language; });
     photos.forEach(button => { button.querySelector('img').alt = button.dataset[language === 'en' ? 'altEn' : 'altFr']; });
-    if (active >= 0) updateCaption();
+    updateViewerLanguage();
+    fitCopy();
   }, animate);
 }
-function updateCaption() {
-  caption.textContent = photos[active].dataset[language === 'en' ? 'captionEn' : 'captionFr'];
-  high.alt = low.alt = photos[active].querySelector('img').alt;
-}
 applyLanguage();
-document.querySelector('#lang-toggle').onclick = () => {
+document.querySelector('#lang-toggle').addEventListener('click', () => {
   language = language === 'en' ? 'fr' : 'en';
-  try { localStorage.setItem('lang',language); } catch {}
+  try { localStorage.setItem('lang', language); } catch {}
   applyLanguage(true);
-};
+});
 document.querySelectorAll('.menu-link').forEach(button => button.addEventListener('click', () => {
   if (button.classList.contains('is-active')) return;
-  closePhoto(false);
-  document.querySelectorAll('.menu-link').forEach(item => item.classList.toggle('is-active',item === button));
-  transitionHero(() => {
-    document.querySelectorAll('.stage-panel').forEach(panel => panel.classList.toggle('is-active',panel.dataset.stage === button.dataset.panel));
+  document.querySelectorAll('.menu-link').forEach(item => item.classList.toggle('is-active', item === button));
+  fadeThrough([stage], () => {
+    closeViewer(false);
+    document.querySelectorAll('.stage-panel').forEach(panel => panel.classList.toggle('is-active', panel.dataset.stage === button.dataset.panel));
+    fitCopy();
   });
 }));
-function targetRect(image) {
-  const width = viewport.clientWidth;
-  const height = Math.max(1,viewport.clientHeight - (caption.textContent ? 48 : 0));
-  const ratio = image.naturalWidth / image.naturalHeight || 1;
-  const w = Math.min(width, height * ratio);
-  const h = w / ratio;
-  return {left:(width-w)/2,top:(height-h)/2,width:w,height:h};
-}
-let slideAnimations = [];
-let closing = false;
-let sliding = false;
-let drag = null;
-let neighbor = null;
-let ignoreClickUntil = 0;
-const duration = () => reducedMotion.matches ? 0 : 660;
-const cssRect = rect => Object.fromEntries(Object.entries(rect).map(([key,value]) => [key,`${value}px`]));
-function position(rect, element = frame) { Object.assign(element.style,cssRect(rect)); }
-function relativeRect(element) {
-  const rect = element.getBoundingClientRect();
-  const bounds = viewport.getBoundingClientRect();
-  return {left:rect.left-bounds.left,top:rect.top-bounds.top,width:rect.width,height:rect.height};
-}
-function clearNeighbor() {
-  neighbor?.remove(); neighbor = null;
-  frame.style.transform = '';
-}
-function loadLarge(button, token) {
-  const image = new Image();
-  image.src = button.dataset.full;
-  image.decode().then(async () => {
-    if (token !== version) return;
-    high.src = image.src;
-    await high.decode();
-    if (token === version) high.classList.add('is-loaded');
-  }).catch(() => {});
-}
-function setPhoto(index) {
-  active = (index + photos.length) % photos.length;
-  const token = ++version;
-  const button = photos[active];
+
+/* ---------- Photo viewer (PhotoSwipe, shown inside the hero box) ---------- */
+
+// PhotoSwipe handles opening from the thumbnail, swiping with momentum (including rapid swipes),
+// arrow keys, pinch-zoom and closing back to the thumbnail. It is mounted inside the gallery box
+// rather than over the whole screen, on a white background, so the grid fades through white as a photo opens.
+
+const CLOSE_SVG = '<svg class="pswp__icn" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 4 20 20M20 4 4 20" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="square"/></svg>';
+
+function slideData(button) {
   const thumb = button.querySelector('img');
-  high.classList.remove('is-loaded');
-  high.removeAttribute('src');
-  low.src = thumb.currentSrc || thumb.src;
-  updateCaption();
-  loadLarge(button,token);
-  return token;
+  const ratio = thumb.naturalWidth && thumb.naturalHeight ? thumb.naturalHeight / thumb.naturalWidth : 4 / 3;
+  const width = Number(button.dataset.width) || 1800;
+  const height = Number(button.dataset.height) || Math.round(1800 * ratio);
+  return {src: button.dataset.full, msrc: thumb.currentSrc || thumb.src, width, height, element: button, thumbCropped: true, alt: thumb.alt};
 }
+function captionText(index) { return photos[index]?.dataset[language === 'en' ? 'captionEn' : 'captionFr'] || ''; }
+
+// PhotoSwipe turns its open/close animation off when the device asks for reduced motion;
+// the site keeps its transitions on for everyone, so that one check is answered "no" while it starts.
+function withMotion(create) {
+  const original = window.matchMedia;
+  window.matchMedia = query => /prefers-reduced-motion/.test(query)
+    ? {matches: false, media: query, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}}
+    : original.call(window, query);
+  try { return create(); } finally { window.matchMedia = original; }
+}
+
+// Desktop (mouse or trackpad) gets its own slide spacing and pace; touch screens keep PhotoSwipe's defaults.
+const isDesktop = () => matchMedia('(hover: hover) and (pointer: fine)').matches;
+const DESKTOP_GAP = 32;          // white space between neighbouring photos while sliding (px)
+const GLIDE_MS = 560;            // arrow-key slide on desktop
+const GLIDE_MIN_MS = 280, GLIDE_MAX_MS = 640;
+
+// Desktop slide motion. It starts at exactly the speed the photos already have (from a drag, or from a slide
+// still in progress when an arrow is pressed again) and eases to rest without overshoot. When that speed is
+// enough to arrive on its own, it is a pure, constant deceleration; otherwise it gently speeds up first.
+let carriedVelocity = 0;        // px/ms of a slide interrupted by the next one
+let lastGlideFrame = 0;         // time of the last frame a slide drew
+class Glide {
+  constructor(props) {
+    this.props = props;
+    this.onFinish = () => {};
+    const delta = props.start - props.end;            // remaining distance (signed)
+    const distance = Math.abs(delta);
+    let velocity = props.velocity || carriedVelocity;  // px/ms
+    // Continuing an interrupted slide: start the clock at its last drawn frame so no frame is skipped.
+    const now = performance.now();
+    this.startTime = carriedVelocity && now - lastGlideFrame < 50 ? lastGlideFrame : now;
+    carriedVelocity = 0;
+    const towards = velocity * delta < 0;
+    let duration = GLIDE_MS;
+    if (velocity && towards && distance > 1) duration = Math.max(GLIDE_MIN_MS, Math.min(GLIDE_MAX_MS, 2 * distance / Math.abs(velocity)));
+    if (velocity && towards && distance > 1) duration = Math.min(duration, 2.9 * distance / Math.abs(velocity)); // never overshoot
+    if (!velocity || !towards) duration = GLIDE_MS;
+    this.delta = delta; this.velocity = velocity; this.duration = duration;
+    const frame = () => {
+      const now = performance.now();
+      lastGlideFrame = now;
+      const s = Math.max(0, Math.min(1, (now - this.startTime) / this.duration));
+      if (s >= 1) { this._raf = 0; props.onUpdate(props.end); props.onComplete?.(); this.onFinish(); return; }
+      props.onUpdate(props.end + this.position(s));
+      this._raf = requestAnimationFrame(frame);
+    };
+    this._raf = requestAnimationFrame(frame);
+  }
+  // Cubic Hermite curve: starts at `delta` with the given speed, ends at 0 with zero speed.
+  position(s) {
+    const t = this.duration * this.velocity;
+    return this.delta * (2 * s ** 3 - 3 * s ** 2 + 1) + t * (s ** 3 - 2 * s ** 2 + s);
+  }
+  speed(s) {
+    return (this.delta * (6 * s ** 2 - 6 * s) + this.duration * this.velocity * (3 * s ** 2 - 4 * s + 1)) / this.duration;
+  }
+  destroy() {
+    if (this._raf) {
+      const s = Math.min(1, (performance.now() - this.startTime) / this.duration);
+      carriedVelocity = this.speed(s);
+      cancelAnimationFrame(this._raf);
+    }
+    this._raf = 0;
+  }
+}
+
+// On desktop the hero is much wider than a portrait photo. With PhotoSwipe's default spacing each photo would
+// travel the full width of the box per move, which reads as photos flying off. Instead neighbours sit just
+// beyond the edge of the box, so they are fully hidden at rest and slide in from the edge.
+function desktopSpacing(size, items) {
+  const widest = Math.max(...items.map(item => Math.min(size.x, size.y * item.width / item.height)));
+  return (size.x / 2 + widest / 2 + DESKTOP_GAP - size.x) / size.x;
+}
+
 function openPhoto(index) {
-  if (!photos.length || closing || active >= 0) return;
-  const token = setPhoto(index);
-  const start = relativeRect(photos[active]);
-  viewer.hidden = false;
-  position(start);
-  viewport.classList.add('is-viewing');
-  scroller.inert = true;
-  // Preserve keyboard access without forcing a pointer-triggered focus outline.
-  if (document.activeElement === photos[active] && photos[active].matches(':focus-visible')) closeButton.focus({preventScroll:true});
-  const ready = () => {
-    if (token !== version) return;
-    const target = targetRect(low);
-    position(target);
-    animation = frame.animate([cssRect(start),cssRect(target)],{duration:duration(),easing:'cubic-bezier(.2,.75,.2,1)'});
+  if (pswp) return;
+  const desktop = isDesktop();
+  const items = photos.map(slideData);
+  const instance = withMotion(() => new PhotoSwipe({
+    dataSource: items,
+    index,
+    appendToEl: viewport,
+    mainClass: 'pswp--inline',
+    getViewportSizeFn: options => {
+      const size = {x: viewport.clientWidth, y: viewport.clientHeight};
+      if (desktop) options.spacing = desktopSpacing(size, items);
+      return size;
+    },
+    padding: {top: 0, bottom: 0, left: 0, right: 0},
+    bgOpacity: 1,
+    spacing: 0.06,
+    loop: true,
+    showHideAnimationType: 'zoom',
+    showAnimationDuration: ZOOM_MS,
+    hideAnimationDuration: ZOOM_MS,
+    easing: ZOOM_EASE,
+    initialZoomLevel: 'fit',
+    secondaryZoomLevel: 2,
+    maxZoomLevel: 3,
+    imageClickAction: false,
+    bgClickAction: 'close',
+    doubleTapAction: false,
+    // A tap on the white area around the photo closes it; a tap on the photo does nothing.
+    tapAction: (point, event) => { if (!event.target.closest('.pswp__img')) instance.close(); },
+    wheelToZoom: false,
+    trapFocus: false,
+    returnFocus: false,
+    zoom: false,
+    counter: false,
+    arrowPrev: false,
+    arrowNext: false,
+    close: true,
+    closeSVG: CLOSE_SVG,
+    closeTitle: closeLabel.getAttribute('aria-label'),
+    errorMsg: '',
+  }));
+  pswp = instance;
+  if (desktop) {
+    // Slides between photos (drag release and arrow keys) use the Glide above; zoom and pan keep PhotoSwipe's springs.
+    const animations = instance.animations;
+    const startSpring = animations.startSpring.bind(animations);
+    animations.startSpring = props => {
+      if (!props.isMainScroll) return startSpring(props);
+      const glide = new Glide(props);
+      animations.activeAnimations.push(glide);
+      glide.onFinish = () => animations.stop(glide);
+      return glide;
+    };
+  }
+  // Arrow keys slide to the next photo instead of cutting; rapid presses queue up naturally.
+  instance.on('keydown', event => {
+    const key = event.originalEvent;
+    if (key.altKey || key.ctrlKey || key.metaKey || key.shiftKey) return;
+    if (key.key !== 'ArrowLeft' && key.key !== 'ArrowRight') return;
+    event.preventDefault();
+    key.preventDefault();
+    instance.mainScroll.moveIndexBy(key.key === 'ArrowRight' ? 1 : -1, true);
+  });
+  // Every slide shows its thumbnail straight away (not just the first), so a photo never appears blank.
+  instance.addFilter('placeholderSrc', (source, content) => content.data.msrc || source);
+  // Cross-fade: the full-size image is only added once it is fully loaded and decoded, then fades in
+  // over the thumbnail, which stays underneath until the fade is done.
+  // The thumbnail stays underneath until the full-size image has completely faded in (PhotoSwipe would
+  // otherwise remove it on its own timer, which could fall before or during the fade and flash white).
+  instance.addFilter('isKeepingPlaceholder', (keep, content) => keep || !(content.element && content.element.dataset.shown));
+  instance.on('contentAppendImage', event => {
+    const {content} = event;
+    const image = content.element;
+    if (!image || image.tagName !== 'IMG' || image.dataset.ready) return;
+    event.preventDefault();
+    if (image.dataset.waiting) return;
+    image.dataset.waiting = '1';
+    const loaded = image.complete && image.naturalWidth
+      ? Promise.resolve()
+      : new Promise(resolve => { image.addEventListener('load', resolve, {once: true}); image.addEventListener('error', resolve, {once: true}); });
+    loaded.then(() => image.decode?.()).catch(() => {}).then(() => {
+      image.dataset.ready = '1';
+      image.classList.add('photo-fade');
+      content.appendImage();
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        image.classList.add('photo-fade--in');
+        setTimeout(() => { image.dataset.shown = '1'; content.removePlaceholder(); }, 450);
+      }));
+    });
+  });
+  const placeInHero = () => {
+    // Pointer positions are measured relative to the hero box rather than the page.
+    const rect = viewport.getBoundingClientRect();
+    instance.offset.x = rect.left + window.scrollX;
+    instance.offset.y = rect.top + window.scrollY;
   };
-  if (low.complete && low.naturalWidth) ready(); else low.onload = ready;
+  instance.on('gettingData', placeInHero);
+  instance.on('updateScrollOffset', placeInHero);
+  instance.on('resize', placeInHero);
+  // Opening and closing zoom to the thumbnail's position inside the hero box.
+  instance.addFilter('thumbBounds', bounds => {
+    if (!bounds) return bounds;
+    const rect = viewport.getBoundingClientRect();
+    return {...bounds, x: bounds.x - rect.left, y: bounds.y - rect.top};
+  });
+  instance.on('uiRegister', () => {
+    instance.ui.registerElement({
+      name: 'caption', order: 9, isButton: false, appendTo: 'root', className: 'photo-caption',
+      onInit: (element, photoswipe) => {
+        const update = () => { element.textContent = captionText(photoswipe.currIndex); element.hidden = !element.textContent; };
+        photoswipe.on('change', update); update();
+      }
+    });
+  });
+  instance.on('close', () => {
+    // Bring the thumbnail into view so the photo can shrink back into it.
+    const button = photos[instance.currIndex];
+    const top = button.offsetTop;
+    if (top < scroller.scrollTop) scroller.scrollTop = top;
+    if (top + button.offsetHeight > scroller.scrollTop + scroller.clientHeight) scroller.scrollTop = top + button.offsetHeight - scroller.clientHeight;
+    document.body.classList.remove('photo-open');
+  });
+  instance.on('destroy', () => { if (pswp === instance) pswp = null; document.body.classList.remove('photo-open'); });
+  document.body.classList.add('photo-open');
+  instance.init();
 }
-function finishClose(previous,restoreFocus) {
-  viewer.hidden = true;
-  active = -1;
-  closing = false;
-  scroller.inert = false;
-  photos[previous].style.visibility = '';
-  if (restoreFocus) photos[previous].focus({preventScroll:true});
+// Instant close, used while the hero is faded out for a tab change.
+function closeViewer(animate = true) {
+  if (!pswp) return;
+  if (animate) pswp.close(); else pswp.destroy();
 }
-function closePhoto(restoreFocus = true) {
-  if (active < 0 || closing) return;
-  closing = true;
-  const previous = active;
-  const start = relativeRect(frame);
-  version++;
-  animation?.cancel();
-  slideAnimations.forEach(item => item.cancel());
-  slideAnimations = [];
-  sliding = false;
-  drag = null;
-  clearNeighbor();
-  // Bring a navigated-to thumbnail into view before returning the photo to it.
-  const button = photos[previous];
-  const top = button.offsetTop;
-  if (top < scroller.scrollTop) scroller.scrollTop = top;
-  if (top + button.offsetHeight > scroller.scrollTop + scroller.clientHeight) scroller.scrollTop = top + button.offsetHeight - scroller.clientHeight;
-  const target = relativeRect(button);
-  button.style.visibility = 'hidden';
-  viewport.classList.remove('is-viewing');
-  caption.textContent = '';
-  position(target);
-  animation = frame.animate([cssRect(start),cssRect(target)],{duration:restoreFocus ? duration() : 0,easing:'cubic-bezier(.2,.75,.2,1)'});
-  animation.finished.then(() => finishClose(previous,restoreFocus)).catch(() => finishClose(previous,restoreFocus));
+function updateViewerLanguage() {
+  if (!pswp) return;
+  pswp.element?.querySelector('.pswp__button--close')?.setAttribute('title', closeLabel.getAttribute('aria-label'));
+  pswp.element?.querySelector('.pswp__button--close')?.setAttribute('aria-label', closeLabel.getAttribute('aria-label'));
+  const caption = pswp.element?.querySelector('.photo-caption');
+  if (caption) { caption.textContent = captionText(pswp.currIndex); caption.hidden = !caption.textContent; }
 }
-function prepareNeighbor(direction) {
-  neighbor?.remove();
-  neighbor = document.createElement('div');
-  neighbor.className = 'photo-frame photo-neighbor';
-  neighbor.setAttribute('aria-hidden','true');
-  const thumb = photos[(active+direction+photos.length)%photos.length].querySelector('img');
-  const image = new Image();
-  image.src = thumb.currentSrc || thumb.src;
-  image.alt = '';
-  neighbor.append(image);
-  viewer.insertBefore(neighbor,caption);
-  const place = () => { if (image.parentElement === neighbor) position(targetRect(image),neighbor); };
-  place(); image.onload = place;
-  return neighbor;
-}
-async function navigate(direction, offset = 0) {
-  if (active < 0 || closing || sliding || photos.length < 2) return;
-  sliding = true;
-  animation?.finish();
-  const token = version;
-  if (!neighbor) prepareNeighbor(direction);
-  const incoming = neighbor;
-  const distance = viewport.clientWidth;
-  const options = {duration:reducedMotion.matches?0:400,easing:'cubic-bezier(.2,.75,.2,1)',fill:'forwards'};
-  const outgoingAnimation = frame.animate([{transform:`translateX(${offset}px)`},{transform:`translateX(${-direction*distance}px)`}],options);
-  const incomingAnimation = incoming.animate([{transform:`translateX(${offset+direction*distance}px)`},{transform:'translateX(0)'}],options);
-  slideAnimations = [outgoingAnimation,incomingAnimation];
-  await Promise.all([outgoingAnimation.finished,incomingAnimation.finished]).catch(() => {});
-  if (token === version && !closing) {
-    setPhoto(active+direction);
-    position(targetRect(incoming.querySelector('img')));
-    clearNeighbor();
-    sliding = false;
-  }
-  outgoingAnimation.cancel(); incomingAnimation.cancel();
-}
-photos.forEach((button,index) => button.addEventListener('click',event => {event.stopPropagation();openPhoto(index);}));
-closeButton.onclick = event => {event.stopPropagation();closePhoto();};
-document.addEventListener('click',event => {
-  if (active < 0 || closing || Date.now() < ignoreClickUntil) return;
-  if (event.target.closest('button,a,input,textarea,select,.photo-caption')) return;
-  const rect = frame.getBoundingClientRect();
-  const insidePhoto = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
-  if (!insidePhoto) closePhoto();
-});
-document.addEventListener('keydown',event => {
-  if (active < 0 || event.ctrlKey || event.metaKey || event.altKey) return;
-  if (event.key === 'Escape') closePhoto();
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-    event.preventDefault(); navigate(event.key === 'ArrowRight' ? 1 : -1);
-  }
-});
-viewer.addEventListener('touchstart',event => {
-  if (event.touches.length !== 1 || closing || sliding || event.target.closest('button')) {drag=null;return;}
-  animation?.finish();
-  drag = {x:event.touches[0].clientX,y:event.touches[0].clientY,dx:0,direction:0};
-},{passive:true});
-viewer.addEventListener('touchmove',event => {
-  if (!drag || event.touches.length !== 1) return;
-  const dx = event.touches[0].clientX-drag.x;
-  const dy = event.touches[0].clientY-drag.y;
-  if (!drag.direction && Math.abs(dy)>Math.abs(dx) && Math.abs(dy)>10) {drag=null;return;}
-  if (Math.abs(dx)<8 && !drag.direction) return;
+
+photos.forEach((button, index) => button.addEventListener('click', event => {
   event.preventDefault();
-  const direction = dx<0?1:-1;
-  if (direction !== drag.direction) prepareNeighbor(direction);
-  drag.direction = direction; drag.dx = dx;
-  frame.style.transform = `translateX(${dx}px)`;
-  neighbor.style.transform = `translateX(${dx+direction*viewport.clientWidth}px)`;
-},{passive:false});
-function releaseDrag(cancelled = false) {
-  if (!drag) return;
-  const {dx,direction} = drag;
-  drag = null;
-  if (!direction) return;
-  ignoreClickUntil = Date.now()+500;
-  if (!cancelled && Math.abs(dx)>45) navigate(direction,dx);
-  else {
-    const options={duration:reducedMotion.matches?0:220,easing:'ease-out'};
-    frame.animate([{transform:`translateX(${dx}px)`},{transform:'translateX(0)'}],options);
-    clearNeighbor();
-  }
+  // Opened by mouse or touch: drop focus from the thumbnail so no focus ring shows on it behind the photo.
+  const byKeyboard = event.detail === 0;
+  if (!byKeyboard) button.blur();
+  openPhoto(index);
+  if (byKeyboard && pswp) pswp.on('destroy', () => photos[index].focus({preventScroll: true}));
+}));
+
+// Clicking or tapping anywhere on the page outside the photo closes it. The listener sits on .page as
+// well as the document because iPhone Safari does not send taps on plain areas to a document listener.
+function closeFromOutside(event) {
+  if (!pswp || pswp.isDestroying) return;
+  if (pswp.element?.contains(event.target)) return;
+  if (event.target.closest('button,a,input,textarea,select,label')) return;
+  pswp.close();
 }
-viewer.addEventListener('touchend',() => releaseDrag(),{passive:true});
-viewer.addEventListener('touchcancel',() => releaseDrag(true),{passive:true});
-new ResizeObserver(() => { if (active>=0 && !closing && !sliding && !drag) { animation?.cancel(); position(targetRect(low)); } }).observe(viewport);
+// Mouse: an ordinary click. Touch: a tap is detected from the pointer itself (finger down and up without
+// moving), because mobile browsers do not reliably send a click for taps on plain areas of the page.
+page.addEventListener('click', event => { if (!event.pointerType || event.pointerType === 'mouse') closeFromOutside(event); });
+document.addEventListener('click', event => { if (!event.pointerType || event.pointerType === 'mouse') closeFromOutside(event); });
+let touchTap = null;
+document.addEventListener('pointerdown', event => {
+  touchTap = event.pointerType === 'mouse' ? null : {id: event.pointerId, x: event.clientX, y: event.clientY, time: performance.now()};
+}, true);
+document.addEventListener('pointerup', event => {
+  const start = touchTap;
+  touchTap = null;
+  if (!start || start.id !== event.pointerId) return;
+  if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10 || performance.now() - start.time > 600) return;
+  closeFromOutside(event);
+}, true);

@@ -5,6 +5,44 @@ const gallery = JSON.parse(await readFile('gallery.json', 'utf8'));
 const escape = value => String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
 const bilingual = (en, fr, className = '') => `<span class="translated ${className}" data-en="${escape(en)}" data-fr="${escape(fr)}">${escape(en)}</span>`;
 const label = (group, key) => `aria-label="${escape(group[key + '_en'])}" data-label-en="${escape(group[key + '_en'])}" data-label-fr="${escape(group[key + '_fr'])}"`;
+// Reads an image's displayed width and height from its file header (JPEG with EXIF rotation, PNG, WebP),
+// so the photo viewer knows each photo's shape before it loads.
+function imageSize(buffer) {
+  try {
+    if (buffer[0] === 0x89 && buffer.toString('ascii', 1, 4) === 'PNG') return {width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20)};
+    if (buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') {
+      const chunk = buffer.toString('ascii', 12, 16);
+      if (chunk === 'VP8X') return {width: 1 + buffer.readUIntLE(24, 3), height: 1 + buffer.readUIntLE(27, 3)};
+      if (chunk === 'VP8L') { const bits = buffer.readUInt32LE(21); return {width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1}; }
+      if (chunk === 'VP8 ') return {width: buffer.readUInt16LE(26) & 0x3fff, height: buffer.readUInt16LE(28) & 0x3fff};
+    }
+    if (buffer[0] === 0xff && buffer[1] === 0xd8) {
+      let offset = 2, orientation = 1;
+      while (offset + 9 < buffer.length) {
+        if (buffer[offset] !== 0xff) { offset++; continue; }
+        const marker = buffer[offset + 1];
+        const length = buffer.readUInt16BE(offset + 2);
+        if (marker === 0xe1 && buffer.toString('ascii', offset + 4, offset + 8) === 'Exif') {
+          const tiff = offset + 10;
+          const little = buffer.toString('ascii', tiff, tiff + 2) === 'II';
+          const u16 = at => little ? buffer.readUInt16LE(at) : buffer.readUInt16BE(at);
+          const u32 = at => little ? buffer.readUInt32LE(at) : buffer.readUInt32BE(at);
+          const directory = tiff + u32(tiff + 4);
+          for (let entry = 0; entry < u16(directory); entry++) {
+            const at = directory + 2 + entry * 12;
+            if (u16(at) === 0x0112) orientation = u16(at + 8);
+          }
+        }
+        if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+          const height = buffer.readUInt16BE(offset + 5), width = buffer.readUInt16BE(offset + 7);
+          return orientation >= 5 ? {width: height, height: width} : {width, height};
+        }
+        offset += 2 + length;
+      }
+    }
+  } catch {}
+  return null;
+}
 const cdn = (source, width) => `/.netlify/images?url=${encodeURIComponent(source)}&w=${width}&fm=webp&q=78`;
 function body(section) {
   return ['en', 'fr'].map(lang => `<div data-language="${lang}" ${lang === 'fr' ? 'hidden' : ''}>` + content[section][lang].map(block => {
@@ -13,6 +51,7 @@ function body(section) {
     return style === 'ornament' ? `<div class="about-ornament">${text}</div>` : `<p class="${style}">${text}</p>`;
   }).join('\n') + '</div>').join('\n');
 }
+const sizes = await Promise.all(gallery.photos.map(photo => readFile(photo.image.replace(/^\//,'')).then(imageSize).catch(() => null)));
 const replacements = {
   title: escape(content.metadata.title_en), description: escape(content.metadata.description_en),
   structured: `<script type="application/ld+json">${JSON.stringify({'@context':'https://schema.org','@type':'GeneralContractor',name:content.header.name,url:'https://contal.work',email:content.contact.email,telephone:content.contact.phone}).replaceAll('<','\\u003c')}</script>`,
@@ -27,7 +66,11 @@ const replacements = {
   photos: gallery.photos.map((photo,index) => {
     const source = '/' + photo.image.replace(/^\//,'');
     if (!source.startsWith('/assets/') || source.includes('..')) throw new Error('Invalid gallery image path');
-    return `<button class="gallery-item" type="button" data-full="${escape(cdn(source,1800))}" data-caption-en="${escape(photo.caption_en)}" data-caption-fr="${escape(photo.caption_fr)}" data-alt-en="${escape(photo.alt_en)}" data-alt-fr="${escape(photo.alt_fr)}" aria-label="${escape(content.interface.open_en)} ${index+1}" data-label-en="${escape(content.interface.open_en)} ${index+1}" data-label-fr="${escape(content.interface.open_fr)} ${index+1}"><img src="${escape(cdn(source,480))}" srcset="${escape(cdn(source,320))} 320w, ${escape(cdn(source,480))} 480w, ${escape(cdn(source,800))} 800w" sizes="(max-width: 700px) 46vw, (max-width: 980px) 23vw, 18vw" alt="${escape(photo.alt_en)}" loading="${index<4?'eager':'lazy'}" decoding="async"></button>`;
+    const size = sizes[index];
+    // The viewer only needs each photo's shape; a nominal 1800px width lets small originals fill the hero too.
+    const scale = size ? 1800 / size.width : 0;
+    const dimensions = size ? `data-width="${Math.round(size.width * scale)}" data-height="${Math.round(size.height * scale)}" ` : '';
+    return `<button class="gallery-item" type="button" ${dimensions}data-full="${escape(cdn(source,1800))}" data-caption-en="${escape(photo.caption_en)}" data-caption-fr="${escape(photo.caption_fr)}" data-alt-en="${escape(photo.alt_en)}" data-alt-fr="${escape(photo.alt_fr)}" aria-label="${escape(content.interface.open_en)} ${index+1}" data-label-en="${escape(content.interface.open_en)} ${index+1}" data-label-fr="${escape(content.interface.open_fr)} ${index+1}"><img src="${escape(cdn(source,480))}" srcset="${escape(cdn(source,320))} 320w, ${escape(cdn(source,480))} 480w, ${escape(cdn(source,800))} 800w" sizes="(max-width: 700px) 46vw, (max-width: 980px) 23vw, 18vw" alt="${escape(photo.alt_en)}" loading="${index<4?'eager':'lazy'}" decoding="async"></button>`;
   }).join('\n')
 };
 let html = await readFile('template.html','utf8');
@@ -38,6 +81,6 @@ html = html.replace(/\{\{(\w+)\}\}/g, (_,key) => {
 html = html.replace('</head>',`<script id="page-metadata" type="application/json">${JSON.stringify(content.metadata).replaceAll('<','\\u003c')}</script></head>`);
 await rm('dist',{recursive:true,force:true});
 await mkdir('dist');
-for (const file of ['assets','admin','style.css','script.js','favicon.png','robots.txt','sitemap.xml']) await cp(file,`dist/${file}`,{recursive:true});
+for (const file of ['assets','admin','vendor','style.css','script.js','favicon.png','robots.txt','sitemap.xml']) await cp(file,`dist/${file}`,{recursive:true});
 await writeFile('dist/index.html',html);
 console.log(`Built page with ${gallery.photos.length} photographs and bilingual copy.`);

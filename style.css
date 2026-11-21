@@ -483,42 +483,81 @@ button:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
   .site-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .lightbox { padding: 64px 40px; }
 }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition: none !important; }
-}
+
 /* Fixed gallery viewport and contained image expansion. */
 .stage { container-type: inline-size; }
 .gallery-viewport { position: relative; width: 100%; height: calc((100cqw - 30px) / 2 + 10px); overflow: hidden; isolation: isolate; background: white; }
-.gallery-scroll { height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; transition: opacity 660ms ease; }
+.gallery-scroll { height: 100%; overflow-y: auto; overscroll-behavior: none; scrollbar-width: none; }
 .gallery-scroll::-webkit-scrollbar { display: none; }
-.is-viewing .gallery-scroll { opacity: 0; pointer-events: none; overflow: hidden; }
 .site-gallery { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
 .gallery-item { min-width: 0; }
-.photo-viewer { position: absolute; inset: 0; z-index: 2; touch-action: pan-y; }
-.photo-viewer[hidden] { display: none; }
-.photo-frame { position: absolute; overflow: hidden; pointer-events: none; }
-.photo-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.photo-high { opacity: 0; transition: opacity 240ms ease; }
-.photo-high.is-loaded { opacity: 1; }
-.photo-close { position: absolute; right: 4px; top: 4px; width: 36px; height: 36px; font: 26px/1 Arial,sans-serif; background: rgba(255,255,255,.85); border: none; cursor: pointer; }
-.photo-caption { position: absolute; bottom: 0; left: 40px; right: 40px; max-height: 40px; overflow: auto; text-align: center; font-size: 13px; }
 .subtitle { white-space: pre-line; }
 .about-content [hidden] { display: none; }
 @media (max-width: 700px) {
   .gallery-viewport { height: 100cqw; }
   .site-gallery { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
 }
-@media (prefers-reduced-motion: reduce) {
- .gallery-scroll,.photo-high { transition: none; }
-}
 
-.photo-close { color: #000; -webkit-text-fill-color: #000; appearance: none; -webkit-appearance: none; border: 0; box-shadow: none; background: transparent; }
-.photo-close:focus { outline: none; }
-.photo-close:focus-visible { outline: 1px dotted #777; outline-offset: -5px; }
-.photo-neighbor { pointer-events: none; }
+
+
 .stage-services, .stage-about { min-height: calc((100cqw - 30px) / 2 + 10px); }
 .stage-services.is-active, .stage-about.is-active { display: flex; align-items: center; }
 .stage-services .about-box, .stage-about .about-box { height: auto; padding-top: 0; padding-bottom: 0; }
 @media (max-width: 700px) {
   .stage-services, .stage-about { min-height: 100cqw; }
 }
+
+
+
+/* Copy in the Services and About panels sits exactly in the middle of the hero area. */
+.about-content [data-language] > :first-child { margin-top: 0; }
+.about-content [data-language] > :last-child { margin-bottom: 0; }
+.changed-letters { display: inline; }
+
+/* The hero keeps one fixed size on every tab: Services and About match the gallery exactly. */
+.stage-services, .stage-about { height: calc((100cqw - 30px) / 2 + 10px); min-height: 0; overflow: hidden; }
+.stage-services .about-box, .stage-about .about-box { height: 100%; padding: 0; }
+.about-content { --copy-size: clamp(0.8rem, 1.4vw, 1.4rem); --initial-size: clamp(1.4rem, 2vw, 2.4rem); --ornament-size: clamp(0.5rem, 1vw, 1rem); }
+.about-content p { font-size: calc(var(--copy-size) * var(--fit, 1)); }
+.about-content p.initial::first-letter { font-size: calc(var(--initial-size) * var(--fit, 1)); }
+.about-content .about-ornament { font-size: calc(var(--ornament-size) * var(--fit, 1)); }
+@media (max-width: 980px) {
+  .about-content { --copy-size: clamp(1rem, 2vw, 2rem); }
+}
+@media (max-width: 700px) {
+  .stage-services, .stage-about { height: 100cqw; }
+  .about-content { --copy-size: clamp(0.85rem, 2.6vw, 2.6rem); --initial-size: clamp(1rem, 2vw, 2.4rem); --ornament-size: 1rem; }
+}
+
+
+/* Photo viewer (PhotoSwipe) shown inside the hero box on white, not over the whole screen. */
+.pswp.pswp--inline { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; --pswp-bg: #fff; --pswp-placeholder-bg: transparent; --pswp-root-z-index: 2; }
+.pswp--inline .pswp__top-bar { height: 44px; }
+.pswp--inline .pswp__button--close { display: grid; place-items: center; width: 36px; height: 36px; margin: 4px 4px 0 0; border-radius: 50%; background: transparent; outline: none; box-shadow: none; -webkit-appearance: none; appearance: none; }
+.pswp--inline .pswp__button--close .pswp__icn { position: static; width: 18px; height: 18px; fill: none; overflow: visible; }
+.pswp--inline .pswp__button--close:focus { outline: none; }
+.pswp--inline .pswp__button--close:focus-visible { background-color: rgba(0, 0, 0, .07); }
+.pswp--inline .photo-caption { position: absolute; bottom: 0; left: 40px; right: 40px; max-height: 40px; overflow: auto; text-align: center; font-size: 13px; color: #000; }
+.pswp--inline .photo-caption[hidden] { display: none; }
+@media (hover: none) {
+  body.photo-open .page { cursor: pointer; }
+}
+/* Full-size photo fades in over its thumbnail once decoded. */
+.pswp--inline .pswp__img.photo-fade { opacity: 0; transition: opacity 400ms ease; }
+.pswp--inline .pswp__img.photo-fade.photo-fade--in { opacity: 1; }
+
+/* Hover areas: each link's clickable area meets the next with no dead strip between them, and the
+   plain text in the header, menu and footer keeps the normal arrow instead of the text cursor,
+   so the cursor no longer flickers while moving across links. Nothing moves visually. */
+.top-row, .pseudo-menu, .bottom-row { cursor: default; }
+.pseudo-menu { gap: 0; }
+.menu-link { padding: 3px 0; margin: -3px 0; }
+.pseudo-menu .menu-link + .menu-link { margin-top: 3px; }
+.email-link { display: inline-block; cursor: pointer; }
+.lang button { cursor: pointer; }
+@media (max-width: 980px) {
+  .menu-link { padding: 2px 0; margin: -2px 0; }
+  .pseudo-menu .menu-link + .menu-link { margin-top: 2px; }
+}
+/* White veil used to fade the hero through white (tabs, language). */
+.stage-veil { position: absolute; inset: 0; z-index: 10; background: #fff; opacity: 0; pointer-events: none; }
