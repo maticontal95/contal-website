@@ -27,6 +27,8 @@
   },
   "interface": {
     "open_fr": "Ouvrir la photo",
+    "figure_en": "Figure",
+    "figure_fr": "Figure",
     "close_en": "Close photograph",
     "language_en": "Switch language",
     "close_fr": "Fermer la photo",
@@ -34,21 +36,19 @@
     "navigation_en": "Section navigation",
     "gallery_en": "Site photographs",
     "navigation_fr": "Navigation des sections",
-    "gallery_fr": "Photos de chantier",
-    "open_en": "Open photograph",
-    "figure_en": "Figure",
-    "figure_fr": "Figure",
     "figures_en": "Figures",
-    "figures_fr": "Figures"
+    "gallery_fr": "Photos de chantier",
+    "figures_fr": "Figures",
+    "open_en": "Open photograph"
   },
   "about": {
     "en": [
       {
-        "text": "**We are driven by** a commitment to the built environment spanning multiple generations:",
+        "text": "**Our commitment** to the built environment spans multiple generations and disciplines:",
         "style": "paragraph"
       },
       {
-        "text": "Born into a family of architects, Mati is trained as an <u>architect</u>, <u>furniture-maker</u>^1, and <u>construction carpenter</u>^2. Our general contracting practice is thus uniquely focused on quality and fidelity to designers' intentions.",
+        "text": "Born into a family of architects, Mati is trained as an <u>architect</u>,^1 <u>furniture-maker</u>,^2 and <u>construction carpenter</u>.^3 This background informs our focus on quality and fidelity to designers' intentions.",
         "style": "paragraph"
       },
       {
@@ -56,11 +56,11 @@
         "style": "ornament"
       },
       {
-        "text": "We maintain a continuing education in both contemporary building science and traditional building crafts^3. We're thus especially motivated to take on projects demanding handcrafted, vernacular materials and details (plaster mouldings, lime rendering, figured brickwork, carved elements, decorative parquet or mosaic work, etc.)",
+        "text": "We maintain a continuing education in contemporary building science and traditional building crafts.^4 We are especially motivated to take on projects demanding handcrafted, vernacular materials and details (plaster mouldings, lime rendering, figured brickwork, carved elements, decorative parquet or mosaic work, etc.)",
         "style": "initial"
       },
       {
-        "text": "Our ambition is to work towards inscribing such techniques within a forward-looking, progressive design synthesis.",
+        "text": "Our ambition is to work with clients and architects towards inscribing such techniques within a forward-looking design synthesis.",
         "style": "paragraph"
       },
       {
@@ -74,7 +74,7 @@
         "style": "paragraph"
       },
       {
-        "text": "Issu d'une famille d'architectes, Mati est formé comme <u>architecte</u>, <u>ébéniste</u>^1 et <u>charpentier-menuisier</u>^2. Notre pratique d'entrepreneuriat général est donc axé sur le dessin architectural, à la recherche sans compromis de qualité et de fidelité d'exécution.",
+        "text": "Issu d'une famille d'architectes, Mati est formé comme <u>architecte</u>,^1 <u>ébéniste</u>^2 et <u>charpentier-menuisier</u>.^3 Notre pratique d'entrepreneuriat général est donc axé sur le dessin architectural, à la recherche sans compromis de qualité et de fidelité d'exécution.",
         "style": "paragraph"
       },
       {
@@ -82,7 +82,7 @@
         "style": "ornament"
       },
       {
-        "text": "Notre formation continue conjugue sciences contemporaines du bâtiment et savoir-faire constructifs traditionnels^3.",
+        "text": "Notre formation continue conjugue sciences contemporaines du bâtiment et savoir-faire constructifs traditionnels.^4",
         "style": "initial"
       },
       {
@@ -151,8 +151,15 @@
   },
   "figures": [
     {
-      "caption_en": "Furniture-making",
-      "caption_fr": "Ébénisterie",
+      "photos": [
+        {
+          "image": "/assets/uploads/marquette-interior-design-package-may-11-53.png"
+        }
+      ]
+    },
+    {
+      "caption_en": "",
+      "caption_fr": "",
       "photos": [
         {
           "image": "/assets/custom-millwork-montreal.jpeg",
@@ -167,8 +174,8 @@
       ]
     },
     {
-      "caption_en": "Construction carpentry, for a general contractor",
-      "caption_fr": "Charpenterie-menuiserie, pour un entrepreneur général",
+      "caption_en": "",
+      "caption_fr": "",
       "photos": [
         {
           "image": "/assets/montreal-duplex-renovation.jpeg",
@@ -183,8 +190,8 @@
       ]
     },
     {
-      "caption_en": "Historic stone houses, Europe",
-      "caption_fr": "Maisons de pierre anciennes, Europe",
+      "caption_en": "",
+      "caption_fr": "",
       "photos": [
         {
           "image": "/assets/custom-structural-masonry-montreal.jpeg",
