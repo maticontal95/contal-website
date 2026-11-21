@@ -559,3 +559,5 @@ button:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
   .menu-link { padding: 2px 0; margin: -2px 0; }
   .pseudo-menu .menu-link + .menu-link { margin-top: 2px; }
 }
+/* White veil used to fade the hero through white (tabs, language). */
+.stage-veil { position: absolute; inset: 0; z-index: 10; background: #fff; opacity: 0; pointer-events: none; }

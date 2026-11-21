@@ -10,7 +10,8 @@ const metadata = JSON.parse(document.querySelector('#page-metadata').textContent
 
 // Timings (ms).
 const ZOOM_MS = 990;        // photo opening / closing
-const ZOOM_EASE = 'cubic-bezier(.2,.75,.2,1)';
+// Starts from rest, builds up gently, then settles in a long soft deceleration (no jolt at either end).
+const ZOOM_EASE = 'cubic-bezier(.35, 0, .1, 1)';
 const FADE_OUT_MS = 260;    // fade-through-white for text and hero
 const FADE_IN_MS = 320;
 
@@ -23,30 +24,43 @@ try { language = localStorage.getItem('lang') === 'fr' ? 'fr' : 'en'; } catch {}
 let fadeAnimations = [];
 let pendingUpdate = null;
 let fadeToken = 0;
-function underlyingOpacity(element) { return parseFloat(getComputedStyle(element).opacity) || 1; }
+// The hero fades through white by fading a white veil in over it and back out, rather than fading the hero's
+// own opacity. Safari does not always apply a fading parent's opacity to the photo viewer's GPU layers,
+// which made an open photo vanish abruptly instead of fading; a veil painted on top works in every browser.
+const veil = document.createElement('div');
+veil.className = 'stage-veil';
+veil.setAttribute('aria-hidden', 'true');
+stage.append(veil);
+const fadeElement = target => target === stage ? veil : target;
+function underlyingOpacity(element) {
+  if (element === veil) return 0;
+  return parseFloat(getComputedStyle(element).opacity) || 1;
+}
+// Opacity keyframes for "visible" (1) and "hidden" (0) — inverted for the veil.
+const shown = (element, visibility, base) => ({opacity: element === veil ? 1 - visibility : visibility * base});
 // Fades every target to white, applies the update, then fades everything back in together.
 function fadeThrough(targets, update, animate = true) {
   // A transition already in progress is completed at once before starting the next one.
-  const current = new Map(fadeAnimations.map(item => [item.element, underlyingOpacity(item.element)]));
+  const current = new Map(fadeAnimations.map(item => [item.element, parseFloat(getComputedStyle(item.element).opacity)]));
   fadeAnimations.forEach(item => item.animation.cancel());
   fadeAnimations = [];
   if (pendingUpdate) { const previous = pendingUpdate; pendingUpdate = null; previous(); }
   const token = ++fadeToken;
   if (!animate) { update(); return; }
   pendingUpdate = update;
-  fadeAnimations = targets.map(element => {
-    const from = current.has(element) ? current.get(element) : underlyingOpacity(element);
-    return {element, animation: element.animate([{opacity: from}, {opacity: 0}], {duration: FADE_OUT_MS, easing: 'ease-in', fill: 'forwards'})};
+  fadeAnimations = targets.map(fadeElement).map(element => {
+    const from = current.has(element) ? current.get(element) : (element === veil ? 0 : underlyingOpacity(element));
+    return {element, animation: element.animate([{opacity: from}, shown(element, 0, 1)], {duration: FADE_OUT_MS, easing: 'ease-in', fill: 'forwards'})};
   });
   Promise.all(fadeAnimations.map(item => item.animation.finished)).then(() => {
     if (token !== fadeToken) return;
     const run = pendingUpdate; pendingUpdate = null; run?.();
     const outgoing = fadeAnimations;
-    fadeAnimations = targets.filter(element => element.isConnected).map(element => {
+    fadeAnimations = targets.map(fadeElement).filter(element => element.isConnected).map(element => {
       const old = outgoing.find(item => item.element === element);
       old?.animation.cancel();
-      const to = underlyingOpacity(element);
-      return {element, animation: element.animate([{opacity: 0}, {opacity: to}], {duration: FADE_IN_MS, easing: 'ease-out'})};
+      const base = underlyingOpacity(element);
+      return {element, animation: element.animate([shown(element, 0, base), shown(element, 1, base)], {duration: FADE_IN_MS, easing: 'ease-out'})};
     });
     outgoing.forEach(item => item.animation.cancel());
     return Promise.all(fadeAnimations.map(item => item.animation.finished)).then(() => { if (token === fadeToken) fadeAnimations = []; });
@@ -284,6 +298,9 @@ function openPhoto(index) {
   instance.addFilter('placeholderSrc', (source, content) => content.data.msrc || source);
   // Cross-fade: the full-size image is only added once it is fully loaded and decoded, then fades in
   // over the thumbnail, which stays underneath until the fade is done.
+  // The thumbnail stays underneath until the full-size image has completely faded in (PhotoSwipe would
+  // otherwise remove it on its own timer, which could fall before or during the fade and flash white).
+  instance.addFilter('isKeepingPlaceholder', (keep, content) => keep || !(content.element && content.element.dataset.shown));
   instance.on('contentAppendImage', event => {
     const {content} = event;
     const image = content.element;
@@ -298,7 +315,10 @@ function openPhoto(index) {
       image.dataset.ready = '1';
       image.classList.add('photo-fade');
       content.appendImage();
-      requestAnimationFrame(() => requestAnimationFrame(() => image.classList.add('photo-fade--in')));
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        image.classList.add('photo-fade--in');
+        setTimeout(() => { image.dataset.shown = '1'; content.removePlaceholder(); }, 450);
+      }));
     });
   });
   const placeInHero = () => {
