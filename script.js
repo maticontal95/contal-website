@@ -104,7 +104,12 @@ function fitCopy() {
     content.style.setProperty('--fit', low.toFixed(4));
   });
 }
-new ResizeObserver(() => fitCopy()).observe(stage);
+// The figures margin spans exactly the hero's height, so its plates line up with the hero's top and bottom.
+function sizeFigures() {
+  const aside = document.querySelector('.about-figures');
+  if (aside) aside.style.height = matchMedia('(max-width: 980px)').matches ? '' : `${stage.offsetHeight}px`;
+}
+new ResizeObserver(() => { fitCopy(); sizeFigures(); }).observe(stage);
 document.fonts?.ready.then(fitCopy);
 
 function applyLanguage(animate = false) {
@@ -132,8 +137,9 @@ document.querySelector('#lang-toggle').addEventListener('click', () => {
 document.querySelectorAll('.menu-link').forEach(button => button.addEventListener('click', () => {
   if (button.classList.contains('is-active')) return;
   document.querySelectorAll('.menu-link').forEach(item => item.classList.toggle('is-active', item === button));
-  fadeThrough([stage], () => {
+  fadeThrough([stage, figuresAside].filter(Boolean), () => {
     closeViewer(false);
+    figuresAside?.classList.toggle('is-active', button.dataset.panel === 'about');
     document.querySelectorAll('.stage-panel').forEach(panel => panel.classList.toggle('is-active', panel.dataset.stage === button.dataset.panel));
     fitCopy();
   });
@@ -154,7 +160,13 @@ function slideData(button) {
   const height = Number(button.dataset.height) || Math.round(1800 * ratio);
   return {src: button.dataset.full, msrc: thumb.currentSrc || thumb.src, width, height, element: button, thumbCropped: true, alt: thumb.alt};
 }
-function captionText(index) { return photos[index]?.dataset[language === 'en' ? 'captionEn' : 'captionFr'] || ''; }
+// A set of photos the viewer can show: the "On site" grid, or the About figures.
+const figuresAside = document.querySelector('.about-figures');
+const figureButtons = [...document.querySelectorAll('.figure-thumb')];
+const gallerySet = {buttons: photos, box: viewport, appendTo: viewport, scroller, className: 'pswp--inline'};
+const figuresSet = {buttons: figureButtons, box: stage, appendTo: document.querySelector('.stage-about'), className: 'pswp--inline pswp--figures', captions: true};
+let viewerSet = gallerySet;
+function captionText(index) { return viewerSet.buttons[index]?.dataset[language === 'en' ? 'captionEn' : 'captionFr'] || ''; }
 
 // PhotoSwipe turns its open/close animation off when the device asks for reduced motion;
 // the site keeps its transitions on for everyone, so that one check is answered "no" while it starts.
@@ -230,21 +242,24 @@ function desktopSpacing(size, items) {
   return (size.x / 2 + widest / 2 + DESKTOP_GAP - size.x) / size.x;
 }
 
-function openPhoto(index) {
+function openPhoto(index, set = gallerySet) {
   if (pswp) return;
+  viewerSet = set;
+  const {box} = set;
   const desktop = isDesktop();
-  const items = photos.map(slideData);
+  const items = set.buttons.map(slideData);
   const instance = withMotion(() => new PhotoSwipe({
     dataSource: items,
     index,
-    appendToEl: viewport,
-    mainClass: 'pswp--inline',
+    appendToEl: set.appendTo,
+    mainClass: set.className,
     getViewportSizeFn: options => {
-      const size = {x: viewport.clientWidth, y: viewport.clientHeight};
+      const size = {x: box.clientWidth, y: box.clientHeight};
       if (desktop) options.spacing = desktopSpacing(size, items);
       return size;
     },
-    padding: {top: 0, bottom: 0, left: 0, right: 0},
+    // Figures keep a line free under the photo for their caption.
+    padding: {top: 0, bottom: set.captions ? 30 : 0, left: 0, right: 0},
     bgOpacity: 1,
     spacing: 0.06,
     loop: true,
@@ -323,7 +338,7 @@ function openPhoto(index) {
   });
   const placeInHero = () => {
     // Pointer positions are measured relative to the hero box rather than the page.
-    const rect = viewport.getBoundingClientRect();
+    const rect = box.getBoundingClientRect();
     instance.offset.x = rect.left + window.scrollX;
     instance.offset.y = rect.top + window.scrollY;
   };
@@ -331,9 +346,27 @@ function openPhoto(index) {
   instance.on('updateScrollOffset', placeInHero);
   instance.on('resize', placeInHero);
   // Opening and closing zoom to the thumbnail's position inside the hero box.
+  // A figure photo hidden on small screens (only one per figure is shown there) zooms from its figure's visible thumbnail.
+  instance.addFilter('thumbEl', (thumbnail, data) => {
+    if (thumbnail && thumbnail.getClientRects().length) return thumbnail;
+    const note = data.element?.dataset.note;
+    const visible = set.buttons.find(button => button.dataset.note === note && button.getClientRects().length);
+    return visible?.querySelector('img') || thumbnail;
+  });
+  // Figures open from thumbnails outside the hero box, so the viewer may draw outside the box while it zooms.
+  if (set === figuresSet) {
+    // While figures are open, the plate of the photo on screen stays highlighted.
+    const highlight = () => linkFigure(set.buttons[instance.currIndex]?.dataset.note || null);
+    instance.on('change', highlight); highlight();
+    instance.on('close', () => linkFigure(null));
+    const outside = on => () => instance.element?.classList.toggle('pswp--zooming', on);
+    instance.on('openingAnimationStart', outside(true));
+    instance.on('openingAnimationEnd', outside(false));
+    instance.on('closingAnimationStart', outside(true));
+  }
   instance.addFilter('thumbBounds', bounds => {
     if (!bounds) return bounds;
-    const rect = viewport.getBoundingClientRect();
+    const rect = box.getBoundingClientRect();
     return {...bounds, x: bounds.x - rect.left, y: bounds.y - rect.top};
   });
   instance.on('uiRegister', () => {
@@ -347,10 +380,12 @@ function openPhoto(index) {
   });
   instance.on('close', () => {
     // Bring the thumbnail into view so the photo can shrink back into it.
-    const button = photos[instance.currIndex];
-    const top = button.offsetTop;
-    if (top < scroller.scrollTop) scroller.scrollTop = top;
-    if (top + button.offsetHeight > scroller.scrollTop + scroller.clientHeight) scroller.scrollTop = top + button.offsetHeight - scroller.clientHeight;
+    if (set.scroller) {
+      const button = set.buttons[instance.currIndex];
+      const top = button.offsetTop;
+      if (top < scroller.scrollTop) scroller.scrollTop = top;
+      if (top + button.offsetHeight > scroller.scrollTop + scroller.clientHeight) scroller.scrollTop = top + button.offsetHeight - scroller.clientHeight;
+    }
     document.body.classList.remove('photo-open');
   });
   instance.on('destroy', () => { if (pswp === instance) pswp = null; document.body.classList.remove('photo-open'); });
@@ -370,14 +405,33 @@ function updateViewerLanguage() {
   if (caption) { caption.textContent = captionText(pswp.currIndex); caption.hidden = !caption.textContent; }
 }
 
-photos.forEach((button, index) => button.addEventListener('click', event => {
+function openFrom(button, index, set, event) {
   event.preventDefault();
+  event.stopPropagation();
+  // Another figure clicked while figures are already open: slide to it.
+  if (pswp && viewerSet === set && !pswp.isDestroying) { pswp.mainScroll.moveIndexBy(index - pswp.potentialIndex, true); return; }
   // Opened by mouse or touch: drop focus from the thumbnail so no focus ring shows on it behind the photo.
   const byKeyboard = event.detail === 0;
   if (!byKeyboard) button.blur();
-  openPhoto(index);
-  if (byKeyboard && pswp) pswp.on('destroy', () => photos[index].focus({preventScroll: true}));
+  openPhoto(index, set);
+  if (byKeyboard && pswp) pswp.on('destroy', () => button.focus({preventScroll: true}));
+}
+photos.forEach((button, index) => button.addEventListener('click', event => openFrom(button, index, gallerySet, event)));
+figureButtons.forEach((button, index) => button.addEventListener('click', event => openFrom(button, index, figuresSet, event)));
+// Footnote marks in the About text open their figure's first photo.
+document.querySelectorAll('.fig-ref button').forEach(mark => mark.addEventListener('click', event => {
+  const index = figureButtons.findIndex(button => button.dataset.note === mark.dataset.note);
+  if (index >= 0) openFrom(mark, index, figuresSet, event);
 }));
+// Pointing at a footnote mark highlights its figure, and pointing at a figure highlights its marks.
+function linkFigure(note) {
+  figuresAside?.classList.toggle('is-linking', Boolean(note));
+  document.querySelectorAll('.figure-plate, .fig-ref button').forEach(element => element.classList.toggle('is-linked', Boolean(note) && element.dataset.note === note));
+}
+document.querySelectorAll('.figure-plate, .fig-ref button').forEach(element => {
+  element.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') linkFigure(element.dataset.note); });
+  element.addEventListener('pointerleave', () => { if (!(pswp && viewerSet === figuresSet)) linkFigure(null); });
+});
 
 // Clicking or tapping anywhere on the page outside the photo closes it. The listener sits on .page as
 // well as the document because iPhone Safari does not send taps on plain areas to a document listener.

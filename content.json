@@ -20,10 +20,10 @@
     "phone": "(613) 220 0362"
   },
   "metadata": {
-    "title_en": "M. Contal Construction Renovation | General Contractor in Montreal",
-    "title_fr": "M. Contal Construction Rénovation | Entrepreneur général à Montréal",
-    "description_en": "M. Contal is a Montreal-based general contracting practice specializing in residential construction and renovation.",
-    "description_fr": "M. Contal est un entrepreneur général à Montréal spécialisé en construction et rénovation résidentielles."
+    "title_en": "Contal, M. — Construction Renovation | General Contractor in Montreal",
+    "title_fr": "Contal, M. — Construction Rénovation | Entrepreneur général à Montréal",
+    "description_en": "Contal, M. is a Montreal-based general contracting practice specializing in residential construction and renovation.",
+    "description_fr": "Contal, M. est un entrepreneur général à Montréal spécialisé en construction et rénovation résidentielles."
   },
   "interface": {
     "open_fr": "Ouvrir la photo",
@@ -35,7 +35,11 @@
     "gallery_en": "Site photographs",
     "navigation_fr": "Navigation des sections",
     "gallery_fr": "Photos de chantier",
-    "open_en": "Open photograph"
+    "open_en": "Open photograph",
+    "figure_en": "Figure",
+    "figure_fr": "Figure",
+    "figures_en": "Figures",
+    "figures_fr": "Figures"
   },
   "about": {
     "en": [
@@ -44,7 +48,7 @@
         "style": "paragraph"
       },
       {
-        "text": "Born into a family of architects, Mati is trained as an <u>architect</u>, <u>furniture-maker</u>, and <u>construction carpenter</u>. Our general contracting practice is thus uniquely focused on quality and fidelity to designers' intentions.",
+        "text": "Born into a family of architects, Mati is trained as an <u>architect</u>, <u>furniture-maker</u>^1, and <u>construction carpenter</u>^2. Our general contracting practice is thus uniquely focused on quality and fidelity to designers' intentions.",
         "style": "paragraph"
       },
       {
@@ -52,7 +56,7 @@
         "style": "ornament"
       },
       {
-        "text": "We maintain a continuing education in both contemporary building science and traditional building crafts. We're thus especially motivated to take on projects demanding handcrafted, vernacular materials and details (plaster mouldings, lime rendering, figured brickwork, carved elements, decorative parquet or mosaic work, etc.)",
+        "text": "We maintain a continuing education in both contemporary building science and traditional building crafts^3. We're thus especially motivated to take on projects demanding handcrafted, vernacular materials and details (plaster mouldings, lime rendering, figured brickwork, carved elements, decorative parquet or mosaic work, etc.)",
         "style": "initial"
       },
       {
@@ -70,7 +74,7 @@
         "style": "paragraph"
       },
       {
-        "text": "Issu d'une famille d'architectes, Mati est formé comme <u>architecte</u>, <u>ébéniste</u> et <u>charpentier-menuisier</u>. Notre pratique d'entrepreneuriat général est donc axé sur le dessin architectural, à la recherche sans compromis de qualité et de fidelité d'exécution.",
+        "text": "Issu d'une famille d'architectes, Mati est formé comme <u>architecte</u>, <u>ébéniste</u>^1 et <u>charpentier-menuisier</u>^2. Notre pratique d'entrepreneuriat général est donc axé sur le dessin architectural, à la recherche sans compromis de qualité et de fidelité d'exécution.",
         "style": "paragraph"
       },
       {
@@ -78,7 +82,7 @@
         "style": "ornament"
       },
       {
-        "text": "Notre formation continue conjugue sciences contemporaines du bâtiment et savoir-faire constructifs traditionnels.",
+        "text": "Notre formation continue conjugue sciences contemporaines du bâtiment et savoir-faire constructifs traditionnels^3.",
         "style": "initial"
       },
       {
@@ -94,7 +98,7 @@
   "services": {
     "en": [
       {
-        "text": "**M. Contal** is a Montreal-based general contracting practice, specializing in residential construction and renovation.",
+        "text": "**Contal, M.** is a Montreal-based general contracting practice, specializing in residential construction and renovation.",
         "style": "paragraph"
       },
       {
@@ -120,7 +124,7 @@
     ],
     "fr": [
       {
-        "text": "**M. Contal** est un entrepreneur général basé à Montréal, spécialisé en construction et rénovation résidentielles.",
+        "text": "**Contal, M.** est un entrepreneur général basé à Montréal, spécialisé en construction et rénovation résidentielles.",
         "style": "paragraph"
       },
       {
@@ -144,5 +148,55 @@
         "style": "ornament"
       }
     ]
-  }
+  },
+  "figures": [
+    {
+      "caption_en": "Furniture-making",
+      "caption_fr": "Ébénisterie",
+      "photos": [
+        {
+          "image": "/assets/custom-millwork-montreal.jpeg",
+          "alt_en": "",
+          "alt_fr": ""
+        },
+        {
+          "image": "/assets/custom-residential-millwork-montreal.jpeg",
+          "alt_en": "",
+          "alt_fr": ""
+        }
+      ]
+    },
+    {
+      "caption_en": "Construction carpentry, for a general contractor",
+      "caption_fr": "Charpenterie-menuiserie, pour un entrepreneur général",
+      "photos": [
+        {
+          "image": "/assets/montreal-duplex-renovation.jpeg",
+          "alt_en": "",
+          "alt_fr": ""
+        },
+        {
+          "image": "/assets/montreal-duplex-addition.jpeg",
+          "alt_en": "",
+          "alt_fr": ""
+        }
+      ]
+    },
+    {
+      "caption_en": "Historic stone houses, Europe",
+      "caption_fr": "Maisons de pierre anciennes, Europe",
+      "photos": [
+        {
+          "image": "/assets/custom-structural-masonry-montreal.jpeg",
+          "alt_en": "",
+          "alt_fr": ""
+        },
+        {
+          "image": "/assets/traditional-building-crafts-montreal.jpeg",
+          "alt_en": "",
+          "alt_fr": ""
+        }
+      ]
+    }
+  ]
 }

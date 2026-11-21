@@ -15,8 +15,8 @@ collections:
     - name: photos
       label: Photos
       label_singular: Photo
-      hint: Add a photo, choose its image, then publish. Uploading to Media alone
-        does not add it to this gallery.
+      hint: Add a photo, choose its image, then publish. Uploading to Media alone does not add it to this
+        gallery.
       widget: list
       summary: '{{fields.image}}'
       fields:
@@ -175,6 +175,22 @@ collections:
         label: Language — français
         widget: string
         required: false
+      - name: figure_en
+        label: Figure — english
+        widget: string
+        required: false
+      - name: figure_fr
+        label: Figure — français
+        widget: string
+        required: false
+      - name: figures_en
+        label: Figures — english
+        widget: string
+        required: false
+      - name: figures_fr
+        label: Figures — français
+        widget: string
+        required: false
     - name: about
       label: About
       widget: object
@@ -267,3 +283,37 @@ collections:
           - paragraph
           - initial
           - ornament
+    - name: figures
+      label: About — figures
+      hint: Photos shown beside the About text. Figure 1 is the first in this list, 2 the second, and
+        so on. To point to a figure from the About text, type ^ and its number right after a word, for
+        example furniture-maker^1.
+      widget: list
+      label_singular: Figure
+      summary: '{{fields.caption_en}}'
+      fields:
+      - name: caption_en
+        label: Caption — english
+        widget: string
+        required: false
+      - name: caption_fr
+        label: Caption — français
+        widget: string
+        required: false
+      - name: photos
+        label: Photos
+        widget: list
+        label_singular: Photo
+        summary: '{{fields.image}}'
+        fields:
+        - name: image
+          label: Photo
+          widget: image
+        - name: alt_fr
+          label: Description accessible française
+          widget: string
+          required: false
+        - name: alt_en
+          label: English accessible description
+          widget: string
+          required: false
